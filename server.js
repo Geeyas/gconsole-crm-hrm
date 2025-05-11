@@ -6,6 +6,8 @@ const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const crypto = require('crypto');
+const apiDocs = require('./docs/apiDocs');
+
 
 //Initialize JWT Token
 const jwt = require('jsonwebtoken');
