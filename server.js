@@ -1,3 +1,58 @@
+//docs for the developer to understand the API Endpoint
+
+const apiDocs = [
+  {
+    method: 'POST',
+    path: '/api/register',
+    description: 'Registers a new user',
+    bodyParams: ['fullname', 'username', 'email', 'password']
+  },
+  {
+    method: 'POST',
+    path: '/api/login',
+    description: 'Logs in a user and returns a JWT token',
+    bodyParams: ['username', 'password']
+  },
+  {
+    method: 'PUT',
+    path: '/api/update-password',
+    description: 'Updates user password',
+    bodyParams: ['username', 'oldPassword', 'newPassword']
+  },
+  {
+    method: 'GET',
+    path: '/api/:table',
+    description: 'Get all records from a table',
+    urlParams: ['table']
+  },
+  {
+    method: 'GET',
+    path: '/api/:table/:id',
+    description: 'Get a specific record from a table by ID',
+    urlParams: ['table', 'id']
+  },
+  {
+    method: 'POST',
+    path: '/api/:table',
+    description: 'Create a new record in a table',
+    urlParams: ['table'],
+    bodyParams: ['<fields based on table>']
+  },
+  {
+    method: 'PUT',
+    path: '/api/:table/:id',
+    description: 'Update a record in a table',
+    urlParams: ['table', 'id'],
+    bodyParams: ['<fields to update>']
+  },
+  {
+    method: 'DELETE',
+    path: '/api/:table/:id',
+    description: 'Delete a record from a table',
+    urlParams: ['table', 'id']
+  }
+];
+
 // Import required packages
 require('dotenv').config();
 const express = require('express');
@@ -5,8 +60,6 @@ const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const crypto = require('crypto');
-
-//test
 
 //Initialize JWT Token
 const jwt = require('jsonwebtoken');
@@ -40,6 +93,15 @@ db.connect((err) => {
     }
     console.log('Connected to the MySQL database');
 });
+
+//API endpoint for the API Endpoint docs
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    message: 'API Endpoint Documentation',
+    endpoints: apiDocs
+  });
+});
+
 
 // API endpoint for Login
 app.post('/api/login', (req, res) => {
