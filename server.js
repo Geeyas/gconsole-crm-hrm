@@ -1,5 +1,4 @@
 //docs for the developer to understand the API Endpoint
-
 const apiDocs = [
   {
     method: 'POST',
