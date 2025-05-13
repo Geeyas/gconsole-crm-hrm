@@ -18,4 +18,4 @@ GCONSOLE-CRM-HRM/
 
 
 
-------------- Idead about the backend --------------------------
+------------- Idea about the backend --------------------------
