@@ -4,13 +4,15 @@ const apiDocs = [
     method: 'POST',
     path: '/api/register',
     description: 'Registers a new user',
-    bodyParams: ['fullname', 'username', 'email', 'password']
+    bodyParams: ['firstname', 'lastname', 'username', 'email', 'password', 'usertype_id'],
+    NOTE: 'usertype_id should be a Dropdown value and in backend only value [1, 2, 3, 4] should be passed. Also, in frontend ask user only for the email and later on pass that email as the username and send it to the backend.'
   },
   {
     method: 'POST',
     path: '/api/login',
     description: 'Logs in a user and returns a JWT token',
-    bodyParams: ['username', 'password']
+    bodyParams: ['username', 'password'],
+    NOTE: 'https://www.npmjs.com/package/jwt-decode  -  Use <npm i jwt-decode> use this link to decode the JWT token and get the information of the user.'
   },
   {
     method: 'PUT',

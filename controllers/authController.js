@@ -52,7 +52,6 @@ exports.login = (req, res) => {
   });
 };
 
-
 exports.register = (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
 
@@ -117,7 +116,6 @@ exports.register = (req, res) => {
     );
   });
 };
-
 
 exports.updatePassword = (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
