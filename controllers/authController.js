@@ -12,12 +12,13 @@ exports.login = (req, res) => {
     return res.status(400).json({ message: 'Username and password required' });
 
   const query = `
-    SELECT u.*, ut.Name AS usertype_name, p.Name AS portal_name
-    FROM Users u
-    LEFT JOIN Usertypes ut ON u.usertypeid = ut.ID
-    LEFT JOIN Portals p ON ut.PortalID = p.ID
-    WHERE u.username = ?
-  `;
+  SELECT u.*, ut.ID AS usertype_id, ut.Name AS usertype_name, p.ID AS portal_id, p.Name AS portal_name
+  FROM Users u
+  LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+  LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+  LEFT JOIN Portals p ON ut.Portalid = p.ID
+  WHERE u.username = ?
+`;
 
   db.query(query, [username], (err, results) => {
     if (err) return res.status(500).json({ message: 'DB error', error: err });
@@ -34,7 +35,9 @@ exports.login = (req, res) => {
         username: user.username,
         email: user.email,
         usertype: user.usertype_name,
-        portal: user.portal_name
+        usertype_id: user.usertype_id,
+        portal: user.portal_name,
+        portal_id: user.portal_id
       },
       jwtSecret,
       { expiresIn: '1h' }
