@@ -8,13 +8,14 @@ const jwtSecret = process.env.JWT_SECRET;
 
 exports.login = (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ message: 'Username and password required' });
+  if (!username || !password)
+    return res.status(400).json({ message: 'Username and password required' });
 
   const query = `
     SELECT u.*, ut.Name AS usertype_name, p.Name AS portal_name
     FROM Users u
     LEFT JOIN Usertypes ut ON u.usertypeid = ut.ID
-    LEFT JOIN Portals p ON u.portalid = p.ID
+    LEFT JOIN Portals p ON ut.PortalID = p.ID
     WHERE u.username = ?
   `;
 
@@ -24,10 +25,17 @@ exports.login = (req, res) => {
 
     const user = results[0];
     const hashedInput = hashPassword(password, user.salt);
-    if (hashedInput !== user.passwordhash) return res.status(401).json({ message: 'Invalid credentials' });
+    if (hashedInput !== user.passwordhash)
+      return res.status(401).json({ message: 'Invalid credentials' });
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, usertype: user.usertype_name, portal: user.portal_name },
+      {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        usertype: user.usertype_name,
+        portal: user.portal_name
+      },
       jwtSecret,
       { expiresIn: '1h' }
     );
@@ -45,8 +53,8 @@ exports.login = (req, res) => {
 
 
 exports.register = (req, res) => {
-  const { fullname, username, email, password, usertype_id, portal_id } = req.body;
-  if (!fullname || !username || !email || !password || !usertype_id || !portal_id)
+  const { fullname, username, email, password, usertype_id } = req.body;
+  if (!fullname || !username || !email || !password || !usertype_id)
     return res.status(400).json({ message: 'All fields are required' });
 
   db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email], (err, result) => {
@@ -56,29 +64,38 @@ exports.register = (req, res) => {
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
 
-    // Step 1: Insert into People table
-    db.query(
-      'INSERT INTO People (Firstname, Emailaddress, Createdat) VALUES (?, ?, NOW())',
-      [fullname, email],
-      (err, peopleResult) => {
-        if (err) return res.status(500).json({ message: 'Error saving person', error: err });
+    // Step 1: Lookup the portal_id using the usertype_id
+    db.query('SELECT PortalID FROM Usertypes WHERE ID = ?', [usertype_id], (err, portalResult) => {
+      if (err || portalResult.length === 0)
+        return res.status(400).json({ message: 'Invalid usertype_id or no portal associated', error: err });
 
-        const personId = peopleResult.insertId;
+      const portal_id = portalResult[0].PortalID;
 
-        // Step 2: Insert into Users table
-        const insertUser = `
-          INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, usertypeid, portalid, linkeduserid)
-          VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
-        `;
-        db.query(insertUser, [fullname, username, email, hash, salt, usertype_id, portal_id, personId], (err, userResult) => {
-          if (err) return res.status(500).json({ message: 'Error creating user', error: err });
+      // Step 2: Insert into People
+      db.query(
+        'INSERT INTO People (Firstname, Emailaddress, Createdat) VALUES (?, ?, NOW())',
+        [fullname, email],
+        (err, peopleResult) => {
+          if (err) return res.status(500).json({ message: 'Error saving person', error: err });
 
-          res.status(201).json({ message: 'User registered', userId: userResult.insertId });
-        });
-      }
-    );
+          const personId = peopleResult.insertId;
+
+          // Step 3: Insert into Users
+          const insertUser = `
+            INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, usertypeid, portalid, linkeduserid)
+            VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
+          `;
+          db.query(insertUser, [fullname, username, email, hash, salt, usertype_id, portal_id, personId], (err, userResult) => {
+            if (err) return res.status(500).json({ message: 'Error creating user', error: err });
+
+            res.status(201).json({ message: 'User registered successfully', userId: userResult.insertId });
+          });
+        }
+      );
+    });
   });
 };
+
 
 
 exports.updatePassword = (req, res) => {
