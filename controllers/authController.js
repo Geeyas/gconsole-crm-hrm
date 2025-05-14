@@ -50,8 +50,6 @@ exports.login = (req, res) => {
 };
 
 
-
-
 exports.register = (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
 
@@ -76,35 +74,43 @@ exports.register = (req, res) => {
         const personId = peopleResult.insertId;
         const fullname = `${firstname} ${lastname}`;
 
-        // Step 2: Insert into Users (no usertypeid or portalid)
+        // Step 2: Insert into Users
         const insertUser = `
-          INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, linkeduserid)
-          VALUES (?, ?, ?, ?, ?, NOW(), ?)
+          INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat)
+          VALUES (?, ?, ?, ?, ?, NOW())
         `;
-        db.query(insertUser, [fullname, username, email, hash, salt, personId], (err, userResult) => {
+        db.query(insertUser, [fullname, username, email, hash, salt], (err, userResult) => {
           if (err)
             return res.status(500).json({ message: 'Error creating user', error: err });
 
           const userId = userResult.insertId;
 
-          // Step 3: Insert into AssignedUsertypes
-          const assignUsertype = `
-            INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat)
-            VALUES (?, ?, NOW())
-          `;
-          db.query(assignUsertype, [userId, usertype_id], (err) => {
-            if (err)
-              return res.status(500).json({ message: 'Error assigning user type', error: err });
+          // Step 2.1: Update People to link user
+          db.query(
+            'UPDATE People SET Linkeduserid = ? WHERE ID = ?',
+            [userId, personId],
+            (err) => {
+              if (err)
+                return res.status(500).json({ message: 'Error linking user to person', error: err });
 
-            res.status(201).json({ message: 'User registered successfully', userId });
-          });
+              // Step 3: Insert into AssignedUsertypes
+              const assignUsertype = `
+                INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat)
+                VALUES (?, ?, NOW())
+              `;
+              db.query(assignUsertype, [userId, usertype_id], (err) => {
+                if (err)
+                  return res.status(500).json({ message: 'Error assigning user type', error: err });
+
+                res.status(201).json({ message: 'User registered successfully', userId });
+              });
+            }
+          );
         });
       }
     );
   });
 };
-
-
 
 
 exports.updatePassword = (req, res) => {
