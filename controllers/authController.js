@@ -53,13 +53,17 @@ exports.login = (req, res) => {
 
 
 exports.register = (req, res) => {
-  const { fullname, username, email, password, usertype_id } = req.body;
-  if (!fullname || !username || !email || !password || !usertype_id)
+  const { firstname, lastname, username, email, password, usertype_id } = req.body;
+
+  // Validate input
+  if (!firstname || !lastname || !username || !email || !password || !usertype_id)
     return res.status(400).json({ message: 'All fields are required' });
 
+  // Check for duplicate email
   db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email], (err, result) => {
     if (err) return res.status(500).json({ message: 'DB error', error: err });
-    if (result[0].count > 0) return res.status(400).json({ message: 'Email already in use' });
+    if (result[0].count > 0)
+      return res.status(400).json({ message: 'Email already in use' });
 
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
@@ -73,23 +77,29 @@ exports.register = (req, res) => {
 
       // Step 2: Insert into People
       db.query(
-        'INSERT INTO People (Firstname, Emailaddress, Createdat) VALUES (?, ?, NOW())',
-        [fullname, email],
+        'INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat) VALUES (?, ?, ?, NOW())',
+        [firstname, lastname, email],
         (err, peopleResult) => {
           if (err) return res.status(500).json({ message: 'Error saving person', error: err });
 
           const personId = peopleResult.insertId;
+          const fullname = `${firstname} ${lastname}`;
 
           // Step 3: Insert into Users
           const insertUser = `
             INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, usertypeid, portalid, linkeduserid)
             VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
           `;
-          db.query(insertUser, [fullname, username, email, hash, salt, usertype_id, portal_id, personId], (err, userResult) => {
-            if (err) return res.status(500).json({ message: 'Error creating user', error: err });
+          db.query(
+            insertUser,
+            [fullname, username, email, hash, salt, usertype_id, portal_id, personId],
+            (err, userResult) => {
+              if (err)
+                return res.status(500).json({ message: 'Error creating user', error: err });
 
-            res.status(201).json({ message: 'User registered successfully', userId: userResult.insertId });
-          });
+              res.status(201).json({ message: 'User registered successfully', userId: userResult.insertId });
+            }
+          );
         }
       );
     });
