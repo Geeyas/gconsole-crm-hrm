@@ -94,15 +94,19 @@ exports.register = (req, res) => {
                 return res.status(500).json({ message: 'Error linking user to person', error: err });
 
               // Step 3: Insert into AssignedUsertypes
-              const assignUsertype =
-                `INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
-                VALUES (?, ?, NOW(), ?, ?)`;
-              db.query(assignUsertype, [userId, usertype_id, 0, 0], (err) => {
+              const SYSTEM_ADMIN_ID = 1; // replace with actual system admin's user ID
+
+              const assignUsertype = `
+                                    INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
+                                    VALUES (?, ?, NOW(), ?, ?)
+                                  `;
+              db.query(assignUsertype, [userId, usertype_id, SYSTEM_ADMIN_ID, SYSTEM_ADMIN_ID], (err) => {
                 if (err)
                   return res.status(500).json({ message: 'Error assigning user type', error: err });
 
                 res.status(201).json({ message: 'User registered successfully', userId });
               });
+
 
 
             }
