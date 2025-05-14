@@ -55,11 +55,9 @@ exports.login = (req, res) => {
 exports.register = (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
 
-  // Validate input
   if (!firstname || !lastname || !username || !email || !password || !usertype_id)
     return res.status(400).json({ message: 'All fields are required' });
 
-  // Check for duplicate email
   db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email], (err, result) => {
     if (err) return res.status(500).json({ message: 'DB error', error: err });
     if (result[0].count > 0)
@@ -68,43 +66,44 @@ exports.register = (req, res) => {
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
 
-    // Step 1: Lookup the portal_id using the usertype_id
-    db.query('SELECT PortalID FROM Usertypes WHERE ID = ?', [usertype_id], (err, portalResult) => {
-      if (err || portalResult.length === 0)
-        return res.status(400).json({ message: 'Invalid usertype_id or no portal associated', error: err });
+    // Step 1: Insert into People
+    db.query(
+      'INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat) VALUES (?, ?, ?, NOW())',
+      [firstname, lastname, email],
+      (err, peopleResult) => {
+        if (err) return res.status(500).json({ message: 'Error saving person', error: err });
 
-      const portal_id = portalResult[0].PortalID;
+        const personId = peopleResult.insertId;
+        const fullname = `${firstname} ${lastname}`;
 
-      // Step 2: Insert into People
-      db.query(
-        'INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat) VALUES (?, ?, ?, NOW())',
-        [firstname, lastname, email],
-        (err, peopleResult) => {
-          if (err) return res.status(500).json({ message: 'Error saving person', error: err });
+        // Step 2: Insert into Users (no usertypeid or portalid)
+        const insertUser = `
+          INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, linkeduserid)
+          VALUES (?, ?, ?, ?, ?, NOW(), ?)
+        `;
+        db.query(insertUser, [fullname, username, email, hash, salt, personId], (err, userResult) => {
+          if (err)
+            return res.status(500).json({ message: 'Error creating user', error: err });
 
-          const personId = peopleResult.insertId;
-          const fullname = `${firstname} ${lastname}`;
+          const userId = userResult.insertId;
 
-          // Step 3: Insert into Users
-          const insertUser = `
-            INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, usertypeid, portalid, linkeduserid)
-            VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
+          // Step 3: Insert into AssignedUsertypes
+          const assignUsertype = `
+            INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat)
+            VALUES (?, ?, NOW())
           `;
-          db.query(
-            insertUser,
-            [fullname, username, email, hash, salt, usertype_id, portal_id, personId],
-            (err, userResult) => {
-              if (err)
-                return res.status(500).json({ message: 'Error creating user', error: err });
+          db.query(assignUsertype, [userId, usertype_id], (err) => {
+            if (err)
+              return res.status(500).json({ message: 'Error assigning user type', error: err });
 
-              res.status(201).json({ message: 'User registered successfully', userId: userResult.insertId });
-            }
-          );
-        }
-      );
-    });
+            res.status(201).json({ message: 'User registered successfully', userId });
+          });
+        });
+      }
+    );
   });
 };
+
 
 
 
