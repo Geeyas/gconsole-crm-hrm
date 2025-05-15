@@ -26,62 +26,69 @@ app.get('/api', (req, res) => {
 });
 
 
-// List all tables
-router.get('/table', async (req, res) => {
+// 👉 /api/table - list all tables
+app.get('/api/table', async (req, res) => {
   try {
-    const tables = await pool.query(`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-        AND table_type = 'BASE TABLE';
-    `);
-    res.json({ tables: tables.rows });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch tables' });
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      `SELECT table_name 
+       FROM information_schema.tables 
+       WHERE table_schema = ?`, 
+      [dbConfig.database]
+    );
+    res.json({ tables: rows });
+    await connection.end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to retrieve tables' });
   }
 });
 
-// Get table info including foreign keys
-router.get('/table/:tableName', async (req, res) => {
+// 👉 /api/table/:tableName - table columns and foreign keys
+app.get('/api/table/:tableName', async (req, res) => {
   const { tableName } = req.params;
   try {
-    const columns = await pool.query(`
-      SELECT column_name, data_type
-      FROM information_schema.columns
-      WHERE table_name = $1
-    `, [tableName]);
+    const connection = await mysql.createConnection(dbConfig);
 
-    const foreignKeys = await pool.query(`
+    // Get columns
+    const [columns] = await connection.execute(
+      `SELECT COLUMN_NAME, DATA_TYPE 
+       FROM INFORMATION_SCHEMA.COLUMNS 
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`,
+      [dbConfig.database, tableName]
+    );
+
+    // Get foreign keys
+    const [foreignKeys] = await connection.execute(`
       SELECT
-        tc.constraint_name,
-        kcu.column_name,
-        ccu.table_name AS foreign_table_name,
-        ccu.column_name AS foreign_column_name
+        kcu.CONSTRAINT_NAME,
+        kcu.COLUMN_NAME,
+        kcu.REFERENCED_TABLE_NAME,
+        kcu.REFERENCED_COLUMN_NAME
       FROM
-        information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-          ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage AS ccu
-          ON ccu.constraint_name = tc.constraint_name
-      WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name=$1
-    `, [tableName]);
+        INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+      WHERE
+        kcu.TABLE_SCHEMA = ? AND
+        kcu.TABLE_NAME = ? AND
+        kcu.REFERENCED_TABLE_NAME IS NOT NULL
+    `, [dbConfig.database, tableName]);
 
     res.json({
       table: tableName,
-      columns: columns.rows,
-      foreignKeys: foreignKeys.rows,
+      columns,
+      foreignKeys
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch table details' });
+
+    await connection.end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to retrieve table info' });
   }
 });
 
 
 
 // Use Routes
-app.use('/api', tableRoutes);  // /api/table, /api/table/:tableName
 app.use('/api', authRoutes);  // e.g., /api/login, /api/register
 app.use('/api', crudRoutes);  // e.g., /api/users, /api/users/:id
 
