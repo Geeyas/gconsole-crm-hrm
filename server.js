@@ -8,7 +8,7 @@ const apiDocs = require('./docs/apiDocs');
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
-const peopleRoutes = require('./routes/usertype');
+const peopleRoutes = require('./controllers/usertype');
 
 // Initialize app
 const app = express();

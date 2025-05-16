@@ -154,3 +154,27 @@ exports.getAllTables = (req, res) => {
     }
   );
 };
+
+exports.getUsertypeByPersonId = (req, res) => {
+  const personId = req.params.id; // Get person ID from route params
+
+  const query = `
+    SELECT u.*, ut.ID AS usertype_id, ut.Name AS usertype_name, 
+           p.ID AS portal_id, p.Name AS portal_name
+    FROM Users u
+    LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+    LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+    LEFT JOIN Portals p ON ut.Portalid = p.ID
+    WHERE u.id = ?
+  `;
+
+  db.query(query, [personId], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database error', error: err });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json(results[0]); // or all rows if expecting multiple
+  });
+};
