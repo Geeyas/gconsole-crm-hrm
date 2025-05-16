@@ -26,9 +26,9 @@ app.get('/api', (req, res) => {
 });
 
 // Use Routes
+app.use('/api/usertype', peopleRoutes);
 app.use('/api', authRoutes);  // e.g., /api/login, /api/register
 app.use('/api', crudRoutes);  // e.g., /api/users, /api/users/:id
-app.use('/api/usertype', peopleRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;
