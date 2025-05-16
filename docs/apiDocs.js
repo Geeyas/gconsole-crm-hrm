@@ -51,7 +51,15 @@ const apiDocs = [
     path: '/api/:table/:id',
     description: 'Delete a record from a table',
     urlParams: ['table', 'id']
+  },
+  {
+    method: "GET",
+    path: "/api/user/:id/usertype",
+    description: "Fetches user details along with assigned usertype and portal information by user ID.",
+    pathParams: ["id"],
+    NOTE: "The 'id' is the user Linkeduserid from the people table. The endpoint returns user info joined with usertype and portal data. Returns 404 if user not found."
   }
+
 ];
 
 module.exports = apiDocs;

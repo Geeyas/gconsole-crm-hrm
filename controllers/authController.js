@@ -5,7 +5,6 @@ const { hashPassword, generateSalt } = require('../utils/hashUtils');
 
 const jwtSecret = process.env.JWT_SECRET;
 
-
 exports.login = (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
@@ -34,10 +33,10 @@ exports.login = (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        usertype: user.usertype_name,
         usertype_id: user.usertype_id,
-        portal: user.portal_name,
-        portal_id: user.portal_id
+        usertype: user.usertype_name,
+        portal_id: user.portal_id,
+        portal: user.portal_name
       },
       jwtSecret,
       { expiresIn: '1h' }

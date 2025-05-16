@@ -8,7 +8,6 @@ const apiDocs = require('./docs/apiDocs');
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
-const peopleRoutes = require('./controllers/usertype');
 
 // Initialize app
 const app = express();
@@ -26,7 +25,6 @@ app.get('/api', (req, res) => {
 });
 
 // Use Routes
-app.use('/api/usertype', peopleRoutes);
 app.use('/api', authRoutes);  // e.g., /api/login, /api/register
 app.use('/api', crudRoutes);  // e.g., /api/users, /api/users/:id
 
