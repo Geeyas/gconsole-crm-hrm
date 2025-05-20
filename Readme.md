@@ -16,4 +16,5 @@ GCONSOLE-CRM-HRM/
 └── server.js                  ← Just sets up Express and loads routes
 
 
+
 ------------- Idea about the backend --------------------------
