@@ -5,6 +5,9 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const apiDocs = require('./docs/apiDocs');
 
+// Enable CORS for all routes
+app.use(cors());
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
