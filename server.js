@@ -5,8 +5,19 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const apiDocs = require('./docs/apiDocs');
 
-// Enable CORS for all routes
-app.use(cors());
+// CORS configuration for specific domains
+const corsOptions = {
+  origin: [
+    'https://workforce-mgmt-61603.web.app',
+    'https://workforce-mgmt-61603.firebaseapp.com',
+    'https://hrm.ygit.tech'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+// Use CORS with the specified options
+app.use(cors(corsOptions));
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
