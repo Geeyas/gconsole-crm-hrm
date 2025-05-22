@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const apiDocs = require('./docs/apiDocs');
 
+
 // CORS configuration for specific domains
 const corsOptions = {
   origin: [
@@ -16,8 +17,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-// Use CORS with the specified options
-app.use(cors(corsOptions));
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -27,8 +26,9 @@ const crudRoutes = require('./routes/crudRoutes');
 const app = express();
 
 // Middleware
-app.use(cors());
+// app.use(cors());
 app.use(bodyParser.json());
+app.use(cors(corsOptions)); // Use CORS with the specified options
 
 // API Docs Endpoint
 app.get('/api', (req, res) => {
