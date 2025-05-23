@@ -1,10 +1,14 @@
-// server.js
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const cors = require('cors');
-const apiDocs = require('./docs/apiDocs');
+const helmet = require('helmet'); // Optional, but recommended
+// const bodyParser = require('body-parser'); // Not needed
 
+const apiDocs = require('./docs/apiDocs');
+const authRoutes = require('./routes/authRoutes');
+const crudRoutes = require('./routes/crudRoutes');
+
+const app = express();
 
 // CORS configuration for specific domains
 const corsOptions = {
@@ -17,20 +21,13 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-
-// Routes
-const authRoutes = require('./routes/authRoutes');
-const crudRoutes = require('./routes/crudRoutes');
-
-// Initialize app
-const app = express();
-
 // Middleware
-// app.use(cors());
-app.use(bodyParser.json());
-app.use(cors(corsOptions)); // Use CORS with the specified options
+app.use(cors(corsOptions));
+app.use(helmet()); // 🛡 Adds basic security headers
+app.use(express.json()); // ✅ Replaces body-parser
+// app.use(bodyParser.json()); // ❌ Not needed
 
-// API Docs Endpoint
+// API Docs
 app.get('/api', (req, res) => {
   res.status(200).json({
     message: 'API Endpoint Documentation',
@@ -38,9 +35,20 @@ app.get('/api', (req, res) => {
   });
 });
 
-// Use Routes
-app.use('/api', authRoutes);  // e.g., /api/login, /api/register
-app.use('/api', crudRoutes);  // e.g., /api/users, /api/users/:id
+// Routes
+app.use('/api', authRoutes);
+app.use('/api', crudRoutes);
+
+// Handle 404 for unknown API routes
+app.use('/api/', (req, res) => {
+  res.status(404).json({ message: 'API route not found' });
+});
+
+// Global error handler (for uncaught errors)
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
+});
 
 // Start server
 const PORT = process.env.PORT || 3000;

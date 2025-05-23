@@ -1,27 +1,27 @@
-// controllers/authController.js
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 const { hashPassword, generateSalt } = require('../utils/hashUtils');
 
 const jwtSecret = process.env.JWT_SECRET;
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
     return res.status(400).json({ message: 'Username and password required' });
 
   const query = `
-  SELECT u.*, ut.ID AS usertype_id, ut.Name AS usertype_name, p.ID AS portal_id, p.Name AS portal_name
-  FROM Users u
-  LEFT JOIN Assignedusertypes au ON au.Userid = u.id
-  LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-  LEFT JOIN Portals p ON ut.Portalid = p.ID
-  WHERE u.username = ?
-`;
+    SELECT u.*, ut.ID AS usertype_id, ut.Name AS usertype_name, p.ID AS portal_id, p.Name AS portal_name
+    FROM Users u
+    LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+    LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+    LEFT JOIN Portals p ON ut.Portalid = p.ID
+    WHERE u.username = ?
+  `;
 
-  db.query(query, [username], (err, results) => {
-    if (err) return res.status(500).json({ message: 'DB error', error: err });
-    if (results.length === 0) return res.status(401).json({ message: 'Invalid username or password' });
+  try {
+    const [results] = await db.query(query, [username]);
+    if (results.length === 0)
+      return res.status(401).json({ message: 'Invalid username or password' });
 
     const user = results[0];
     const hashedInput = hashPassword(password, user.salt);
@@ -48,114 +48,107 @@ exports.login = (req, res) => {
       usertype: user.usertype_name,
       portal: user.portal_name
     });
-  });
+  } catch (err) {
+    console.error('Login DB error:', err);
+    res.status(500).json({ message: 'DB error', error: err });
+  }
 };
 
-exports.register = (req, res) => {
+exports.register = async (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
 
   if (!firstname || !lastname || !username || !email || !password || !usertype_id)
     return res.status(400).json({ message: 'All fields are required' });
 
-  db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email], (err, result) => {
-    if (err) return res.status(500).json({ message: 'DB error', error: err });
-    if (result[0].count > 0)
+  try {
+    const [existing] = await db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email]);
+    if (existing[0].count > 0)
       return res.status(400).json({ message: 'Email already in use' });
 
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
 
-    // Step 1: Insert into People
-    db.query(
+    const [peopleResult] = await db.query(
       'INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat) VALUES (?, ?, ?, NOW())',
-      [firstname, lastname, email],
-      (err, peopleResult) => {
-        if (err) return res.status(500).json({ message: 'Error saving person', error: err });
-
-        const personId = peopleResult.insertId;
-        const fullname = `${firstname} ${lastname}`;
-
-        // Step 2: Insert into Users
-        const insertUser = `
-          INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat)
-          VALUES (?, ?, ?, ?, ?, NOW())
-        `;
-        db.query(insertUser, [fullname, username, email, hash, salt], (err, userResult) => {
-          if (err)
-            return res.status(500).json({ message: 'Error creating user', error: err });
-
-          const userId = userResult.insertId;
-
-          // Step 2.1: Update People to link user
-          db.query(
-            'UPDATE People SET Linkeduserid = ? WHERE ID = ?',
-            [userId, personId],
-            (err) => {
-              if (err)
-                return res.status(500).json({ message: 'Error linking user to person', error: err });
-
-              // Step 3: Insert into AssignedUsertypes
-              const SYSTEM_ADMIN_ID = 1; // replace with actual system admin's user ID
-
-              const assignUsertype = `
-                                    INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
-                                    VALUES (?, ?, NOW(), ?, ?)
-                                  `;
-              db.query(assignUsertype, [userId, usertype_id, SYSTEM_ADMIN_ID, SYSTEM_ADMIN_ID], (err) => {
-                if (err)
-                  return res.status(500).json({ message: 'Error assigning user type', error: err });
-
-                res.status(201).json({ message: 'User registered successfully', userId });
-              });
-
-            }
-          );
-        });
-      }
+      [firstname, lastname, email]
     );
-  });
+
+    const personId = peopleResult.insertId;
+    const fullname = `${firstname} ${lastname}`;
+
+    const [userResult] = await db.query(
+      'INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat) VALUES (?, ?, ?, ?, ?, NOW())',
+      [fullname, username, email, hash, salt]
+    );
+
+    const userId = userResult.insertId;
+
+    await db.query(
+      'UPDATE People SET Linkeduserid = ? WHERE ID = ?',
+      [userId, personId]
+    );
+
+    const SYSTEM_ADMIN_ID = 1; // change if needed
+
+    await db.query(
+      `INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
+       VALUES (?, ?, NOW(), ?, ?)`,
+      [userId, usertype_id, SYSTEM_ADMIN_ID, SYSTEM_ADMIN_ID]
+    );
+
+    res.status(201).json({ message: 'User registered successfully', userId });
+
+  } catch (err) {
+    console.error('Register error:', err);
+    res.status(500).json({ message: 'Registration failed', error: err });
+  }
 };
 
-exports.updatePassword = (req, res) => {
+exports.updatePassword = async (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
-  if (!username || !oldPassword || !newPassword) return res.status(400).json({ message: 'Missing fields' });
+  if (!username || !oldPassword || !newPassword)
+    return res.status(400).json({ message: 'Missing fields' });
 
-  db.query('SELECT * FROM Users WHERE username = ?', [username], (err, results) => {
-    if (err) return res.status(500).json({ message: 'DB error', error: err });
-    if (results.length === 0) return res.status(404).json({ message: 'User not found' });
+  try {
+    const [results] = await db.query('SELECT * FROM Users WHERE username = ?', [username]);
+    if (results.length === 0)
+      return res.status(404).json({ message: 'User not found' });
 
     const user = results[0];
     const oldHash = hashPassword(oldPassword, user.salt);
-    if (oldHash !== user.passwordhash) return res.status(401).json({ message: 'Old password is incorrect' });
+    if (oldHash !== user.passwordhash)
+      return res.status(401).json({ message: 'Old password is incorrect' });
 
     const newSalt = generateSalt();
     const newHash = hashPassword(newPassword, newSalt);
 
-    const update = `UPDATE Users SET passwordhash = ?, salt = ?, updatedat = NOW(), updatedbyid = 1 WHERE username = ?`;
-    db.query(update, [newHash, newSalt, username], err => {
-      if (err) return res.status(500).json({ message: 'Password update failed', error: err });
-      res.status(200).json({ message: 'Password updated successfully' });
-    });
-  });
+    await db.query(
+      'UPDATE Users SET passwordhash = ?, salt = ?, updatedat = NOW(), updatedbyid = 1 WHERE username = ?',
+      [newHash, newSalt, username]
+    );
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Password update error:', err);
+    res.status(500).json({ message: 'Password update failed', error: err });
+  }
 };
 
-exports.getAllTables = (req, res) => {
-  db.query(
-    `SELECT table_name 
-     FROM information_schema.tables 
-     WHERE table_schema = DATABASE()`,
-    (err, results) => {
-      if (err) {
-        return res.status(500).json({ message: 'Database error', error: err });
-      }
-      const tables = results.map(row => row.TABLE_NAME);
-      res.status(200).json({ tables });
-    }
-  );
+exports.getAllTables = async (req, res) => {
+  try {
+    const [results] = await db.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()`
+    );
+    const tables = results.map(row => row.TABLE_NAME);
+    res.status(200).json({ tables });
+  } catch (err) {
+    console.error('Table fetch error:', err);
+    res.status(500).json({ message: 'Database error', error: err });
+  }
 };
 
-exports.getUsertypeByPersonId = (req, res) => {
-  const personId = req.params.id; // Get person ID from route params
+exports.getUsertypeByPersonId = async (req, res) => {
+  const personId = req.params.id;
 
   const query = `
     SELECT u.*, ut.ID AS usertype_id, ut.Name AS usertype_name, 
@@ -167,13 +160,14 @@ exports.getUsertypeByPersonId = (req, res) => {
     WHERE u.id = ?
   `;
 
-  db.query(query, [personId], (err, results) => {
-    if (err) {
-      return res.status(500).json({ message: 'Database error', error: err });
-    }
-    if (results.length === 0) {
+  try {
+    const [results] = await db.query(query, [personId]);
+    if (results.length === 0)
       return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json(results[0]); // or all rows if expecting multiple
-  });
+
+    res.status(200).json(results[0]);
+  } catch (err) {
+    console.error('Usertype fetch error:', err);
+    res.status(500).json({ message: 'Database error', error: err });
+  }
 };
