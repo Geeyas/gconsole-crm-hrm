@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet'); // Optional, but recommended
-// const bodyParser = require('body-parser'); // Not needed
 
 const apiDocs = require('./docs/apiDocs');
 const authRoutes = require('./routes/authRoutes');
@@ -15,7 +14,8 @@ const corsOptions = {
   origin: [
     'https://workforce-mgmt-61603.web.app',
     'https://workforce-mgmt-61603.firebaseapp.com',
-    'https://hrm.ygit.tech'
+    'https://hrm.ygit.tech',
+    'http://localhost:4200'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -25,7 +25,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(helmet()); // 🛡 Adds basic security headers
 app.use(express.json()); // ✅ Replaces body-parser
-// app.use(bodyParser.json()); // ❌ Not needed
 
 // API Docs
 app.get('/api', (req, res) => {
