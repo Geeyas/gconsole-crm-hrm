@@ -202,7 +202,6 @@ exports.updateUserProfile = async (req, res) => {
     TFN,
     BSB,
     Bankaccountnumber
-    // Add more fields as needed
   } = req.body;
 
   try {
@@ -213,7 +212,6 @@ exports.updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found in People table' });
     }
 
-    // Build dynamic query for People update
     await db.query(
       `UPDATE People SET
         Firstname = ?, Lastname = ?, Middlename = ?, Preferredname = ?, Emailaddress = ?, 
@@ -229,7 +227,6 @@ exports.updateUserProfile = async (req, res) => {
       ]
     );
 
-    // Optional: Update fullname and email in Users table
     const fullname = `${Firstname} ${Lastname}`;
     await db.query(
       `UPDATE Users SET fullname = ?, email = ?, updatedat = NOW(), updatedbyid = ?
