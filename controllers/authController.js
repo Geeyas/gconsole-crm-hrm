@@ -56,29 +56,42 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
+  const creatorId = req.user?.id;
 
-  if (!firstname || !lastname || !username || !email || !password || !usertype_id)
+  if (!creatorId) {
+    return res.status(401).json({ message: 'Unauthorized. Creator ID not found.' });
+  }
+
+  if (!firstname || !lastname || !username || !email || !password || !usertype_id) {
     return res.status(400).json({ message: 'All fields are required' });
+  }
 
   try {
-    const [existing] = await db.query('SELECT COUNT(*) AS count FROM Users WHERE email = ?', [email]);
-    if (existing[0].count > 0)
+    const [existing] = await db.query(
+      'SELECT COUNT(*) AS count FROM Users WHERE email = ?',
+      [email]
+    );
+
+    if (existing[0].count > 0) {
       return res.status(400).json({ message: 'Email already in use' });
+    }
 
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
+    const fullname = `${firstname} ${lastname}`;
 
     const [peopleResult] = await db.query(
-      'INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat) VALUES (?, ?, ?, NOW())',
-      [firstname, lastname, email]
+      `INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat, Createdbyid, Updatedat, Updatedbyid)
+       VALUES (?, ?, ?, NOW(), ?, NOW(), ?)`,
+      [firstname, lastname, email, creatorId, creatorId]
     );
 
     const personId = peopleResult.insertId;
-    const fullname = `${firstname} ${lastname}`;
 
     const [userResult] = await db.query(
-      'INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat) VALUES (?, ?, ?, ?, ?, NOW())',
-      [fullname, username, email, hash, salt]
+      `INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, createdbyid, updatedat, updatedbyid)
+       VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
+      [fullname, username, email, hash, salt, creatorId, creatorId]
     );
 
     const userId = userResult.insertId;
@@ -88,12 +101,10 @@ exports.register = async (req, res) => {
       [userId, personId]
     );
 
-    const SYSTEM_ADMIN_ID = 1; // change if needed
-
     await db.query(
       `INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
        VALUES (?, ?, NOW(), ?, ?)`,
-      [userId, usertype_id, SYSTEM_ADMIN_ID, SYSTEM_ADMIN_ID]
+      [userId, usertype_id, creatorId, creatorId]
     );
 
     res.status(201).json({ message: 'User registered successfully', userId });
@@ -171,3 +182,66 @@ exports.getUsertypeByPersonId = async (req, res) => {
     res.status(500).json({ message: 'Database error', error: err });
   }
 };
+
+exports.updateUserProfile = async (req, res) => {
+  const targetUserId = req.params.id;
+  const updaterId = req.user?.id;
+
+  const {
+    Firstname,
+    Lastname,
+    Middlename,
+    Preferredname,
+    Emailaddress,
+    Country,
+    State,
+    Suburb,
+    Postcode,
+    HomeAddress,
+    Workaddress,
+    TFN,
+    BSB,
+    Bankaccountnumber
+    // Add more fields as needed
+  } = req.body;
+
+  try {
+    // Check if user exists in People table
+    const [personRows] = await db.query(`SELECT * FROM People WHERE Linkeduserid = ?`, [targetUserId]);
+
+    if (personRows.length === 0) {
+      return res.status(404).json({ message: 'User not found in People table' });
+    }
+
+    // Build dynamic query for People update
+    await db.query(
+      `UPDATE People SET
+        Firstname = ?, Lastname = ?, Middlename = ?, Preferredname = ?, Emailaddress = ?, 
+        Country = ?, State = ?, Suburb = ?, Postcode = ?, HomeAddress = ?, Workaddress = ?, 
+        TFN = ?, BSB = ?, Bankaccountnumber = ?, 
+        Updatedat = NOW(), Updatedbyid = ?
+       WHERE Linkeduserid = ?`,
+      [
+        Firstname, Lastname, Middlename, Preferredname, Emailaddress,
+        Country, State, Suburb, Postcode, HomeAddress, Workaddress,
+        TFN, BSB, Bankaccountnumber,
+        updaterId, targetUserId
+      ]
+    );
+
+    // Optional: Update fullname and email in Users table
+    const fullname = `${Firstname} ${Lastname}`;
+    await db.query(
+      `UPDATE Users SET fullname = ?, email = ?, updatedat = NOW(), updatedbyid = ?
+       WHERE id = ?`,
+      [fullname, Emailaddress, updaterId, targetUserId]
+    );
+
+    res.status(200).json({ message: 'User profile updated successfully' });
+
+  } catch (err) {
+    console.error('Update error:', err);
+    res.status(500).json({ message: 'Failed to update profile', error: err.message });
+  }
+};
+

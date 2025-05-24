@@ -58,8 +58,30 @@ const apiDocs = [
     description: "Fetches user details along with assigned usertype and portal information by user ID.",
     pathParams: ["id"],
     NOTE: "The 'id' is the user Linkeduserid from the people table. The endpoint returns user info joined with usertype and portal data. Returns 404 if user not found."
+  },
+  {
+    method: 'PUT',
+    path: '/api/people/:id',
+    description: 'Updates the People record for a user and reflects relevant changes to the Users table (e.g., fullname, email). Only accessible by Staff - Standard User or System Admin.',
+    urlParams: ['id'],
+    bodyParams: [
+      'Firstname',
+      'Lastname',
+      'Emailaddress',
+      'Middlename',
+      'Preferredname',
+      'Country',
+      'State',
+      'Suburb',
+      'Postcode',
+      'HomeAddress',
+      'Workaddress',
+      'TFN',
+      'BSB',
+      'Bankaccountnumber',
+    ],
+    NOTE: 'The :id is the Linkeduserid from the People table. The API updates People data and updates corresponding Users fields fullname and email accordingly. Requires Authorization header with a valid JWT token belonging to either Staff - Standard User or System Admin.'
   }
-
 ];
 
 module.exports = apiDocs;

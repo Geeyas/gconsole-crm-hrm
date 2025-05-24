@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = (req, res, next) => {
+const authenticate = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return res.status(401).json({ message: 'No token provided' });
 
@@ -13,3 +13,16 @@ module.exports = (req, res, next) => {
     next();
   });
 };
+
+const authorizeManager = (req, res, next) => {
+  if (req.user?.usertype !== 'Staff - Standard User' && req.user?.usertype !== 'System Admin') {
+    return res.status(403).json({ message: "Access denied: 'Staff - Standard User' only" });
+  }
+  next();
+};
+
+module.exports = {
+  authenticate,
+  authorizeManager
+};
+
