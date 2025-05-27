@@ -40,14 +40,14 @@ exports.login = async (req, res) => {
         portal: user.portal_name
       },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '10s' }
     );
 
     // Refresh Token (long-lived)
     const refreshToken = jwt.sign(
       { id: user.id },
       process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '20s' }
     );
 
     // Send refresh token as HTTP-only cookie
@@ -55,7 +55,9 @@ exports.login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // true in production
       sameSite: 'Strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      // maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 20 * 1000 // 20 seconds
+
     });
 
     res.status(200).json({
@@ -83,7 +85,7 @@ exports.refreshToken = (req, res) => {
         // you could fetch the user and include other info again if needed
       },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '20s' }
     );
 
     res.json({ token: newtoken });
