@@ -29,7 +29,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
 
     // Access Token (short-lived)
-    const accessToken = jwt.sign(
+    const token = jwt.sign(
       {
         id: user.id,
         username: user.username,
@@ -60,7 +60,7 @@ exports.login = async (req, res) => {
 
     res.status(200).json({
       message: 'Login successful',
-      accessToken,
+      token,
       usertype: user.usertype_name,
       portal: user.portal_name
     });
@@ -77,7 +77,7 @@ exports.refreshToken = (req, res) => {
   jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
     if (err) return res.status(403).json({ message: 'Invalid or expired refresh token' });
 
-    const newAccessToken = jwt.sign(
+    const newtoken = jwt.sign(
       {
         id: decoded.id
         // you could fetch the user and include other info again if needed
@@ -86,7 +86,7 @@ exports.refreshToken = (req, res) => {
       { expiresIn: '1h' }
     );
 
-    res.json({ accessToken: newAccessToken });
+    res.json({ token: newtoken });
   });
 };
 
