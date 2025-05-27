@@ -22,6 +22,30 @@ function isValidTable(table) {
 
 // --- CONTROLLER FUNCTIONS ---
 
+exports.getAllPaginated = async (req, res) => {
+  const table = req.params.table;
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+
+  const limit = parseInt(req.query.limit) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const offset = (page - 1) * limit;
+
+  try {
+    const [results] = await db.query(`SELECT * FROM ?? LIMIT ? OFFSET ?`, [table, limit, offset]);
+    res.status(200).json({
+      data: results,
+      pagination: {
+        page,
+        limit
+      }
+    });
+  } catch (err) {
+    console.error('Fetch error:', err);
+    res.status(500).json({ message: 'Fetch error', error: err });
+  }
+};
+
+
 exports.getAll = async (req, res) => {
   const table = req.params.table;
   if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });

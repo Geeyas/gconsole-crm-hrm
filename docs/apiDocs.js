@@ -83,11 +83,12 @@ const apiDocs = [
     NOTE: 'The :id is the Linkeduserid from the People table. The API updates People data and updates corresponding Users fields fullname and email accordingly. Requires Authorization header with a valid JWT token belonging to either Staff - Standard User or System Admin.'
   },
   {
-    method: 'POST',
-    path: '/api/refresh-token',
-    description: 'Gets a new access token using the refresh token (sent automatically in a cookie).',
-    bodyParams: [],
-    NOTE: 'No input needed. Just make a POST request. The backend reads the refresh token from the httpOnly cookie and returns a new access token. Frontend should call this when current access token is expired or gets 401. Save the new token and keep using it for other requests.'
+    method: 'GET',
+    path: '/api/:table/paginated',
+    description: 'Get paginated records from a specific table.',
+    urlParams: ['table'],
+    queryParams: ['limit', 'page'],
+    NOTE: 'The `table` parameter is the name of the table (e.g., Users). `limit` can be one of [5, 10, 20, 50]. `page` starts from 1. Returns a data array and a pagination object. Example: /api/Users/paginated?limit=10&page=2'
   }
 
 ];
