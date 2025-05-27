@@ -28,7 +28,8 @@ exports.login = async (req, res) => {
     if (hashedInput !== user.passwordhash)
       return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign(
+    // Access Token (short-lived)
+    const accessToken = jwt.sign(
       {
         id: user.id,
         username: user.username,
@@ -38,13 +39,28 @@ exports.login = async (req, res) => {
         portal_id: user.portal_id,
         portal: user.portal_name
       },
-      jwtSecret,
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
+    // Refresh Token (long-lived)
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Send refresh token as HTTP-only cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // true in production
+      sameSite: 'Strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
     res.status(200).json({
       message: 'Login successful',
-      token,
+      accessToken,
       usertype: user.usertype_name,
       portal: user.portal_name
     });
@@ -53,6 +69,27 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: 'DB error', error: err });
   }
 };
+
+exports.refreshToken = (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+  if (!refreshToken) return res.status(401).json({ message: 'No refresh token found' });
+
+  jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ message: 'Invalid or expired refresh token' });
+
+    const newAccessToken = jwt.sign(
+      {
+        id: decoded.id
+        // you could fetch the user and include other info again if needed
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  });
+};
+
 
 exports.register = async (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;

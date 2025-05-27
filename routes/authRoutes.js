@@ -6,6 +6,8 @@ const { authenticate, authorizeManager } = require('../middleware/authMiddleware
 
 router.post('/login', authController.login);
 router.post('/register', authenticate, authController.register);
+router.post('/refresh-token', authController.refreshToken); 
+
 
 router.put('/update-password', authenticate, authController.updatePassword);
 router.put('/people/:id', authenticate, authorizeManager, authController.updateUserProfile);

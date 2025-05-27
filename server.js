@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const helmet = require('helmet'); // Optional, but recommended
 
 const apiDocs = require('./docs/apiDocs');
@@ -8,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
 
 const app = express();
+app.use(cookieParser());
 
 // CORS configuration for specific domains
 const corsOptions = {
