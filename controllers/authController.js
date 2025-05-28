@@ -153,6 +153,8 @@ exports.register = async (req, res) => {
 
 exports.updatePassword = async (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
+  const updaterId = req.user?.id;
+
   if (!username || !oldPassword || !newPassword)
     return res.status(400).json({ message: 'Missing fields' });
 
@@ -170,8 +172,8 @@ exports.updatePassword = async (req, res) => {
     const newHash = hashPassword(newPassword, newSalt);
 
     await db.query(
-      'UPDATE Users SET passwordhash = ?, salt = ?, updatedat = NOW(), updatedbyid = 1 WHERE username = ?',
-      [newHash, newSalt, username]
+      'UPDATE Users SET passwordhash = ?, salt = ?, updatedat = NOW(), updatedbyid = ? WHERE username = ?',
+      [newHash, newSalt, updaterId, username]
     );
 
     res.status(200).json({ message: 'Password updated successfully' });
