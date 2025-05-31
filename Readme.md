@@ -6,6 +6,8 @@ GCONSOLE-CRM-HRM/
 │   └── crudController.js      ← Generic CRUD logic
 ├── docs/
 │   └── apiDocs.js             ← Existing API documentation
+├── middleware
+│   └── authMiddleware.js
 ├── routes/
 │   ├── authRoutes.js          ← Routes for auth endpoints
 │   └── crudRoutes.js          ← Routes for CRUD endpoints
@@ -13,6 +15,7 @@ GCONSOLE-CRM-HRM/
 │   └── hashUtils.js           ← Password hashing functions
 ├── .env
 ├── package.json
+├── package-lock.json
 └── server.js                  ← Just sets up Express and loads routes
 
 

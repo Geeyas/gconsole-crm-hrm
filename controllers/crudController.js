@@ -31,12 +31,18 @@ exports.getAllPaginated = async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
+    // Get total count
+    const [countResult] = await db.query(`SELECT COUNT(*) as total FROM ??`, [table]);
+    const total = countResult[0]?.total || 0;
+
+    // Get paginated data
     const [results] = await db.query(`SELECT * FROM ?? LIMIT ? OFFSET ?`, [table, limit, offset]);
     res.status(200).json({
       data: results,
       pagination: {
         page,
-        limit
+        limit,
+        total
       }
     });
   } catch (err) {
