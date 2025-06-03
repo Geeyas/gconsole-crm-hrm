@@ -2,11 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { authenticate, authorizeManager } = require('../middleware/authMiddleware');
+const { authenticate, authorizeManager, authorizeClient, authorizeStaffOrAdmin } = require('../middleware/authMiddleware');
 
 router.post('/login', authController.login);
 router.post('/register', authenticate, authController.register);
-router.post('/refresh-token', authController.refreshToken); 
+router.post('/refresh-token', authController.refreshToken);
+router.post('/clientshiftrequests', authenticate, authorizeClient, authController.createClientShiftRequest);
+router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, authController.linkClientUserToLocation);
 
 
 router.put('/update-password', authenticate, authController.updatePassword);

@@ -280,3 +280,145 @@ exports.updateUserProfile = async (req, res) => {
   }
 };
 
+// Create a client shift request and related staff shifts
+exports.createClientShiftRequest = async (req, res) => {
+  const dbConn = db; // Use your db connection
+  const {
+    clientlocationid,
+    shiftdate,
+    starttime,
+    endtime,
+    qualificationid,
+    totalrequiredstaffnumber,
+    additionalvalue
+  } = req.body;
+  const createdbyid = req.user?.id || req.body.createdbyid; // Get from auth middleware or body
+  const updatedbyid = createdbyid;
+  const now = new Date();
+
+  // 1. Validate client access for this user
+  try {
+    // Get clientid from Clientlocations (remove deletedat check)
+    const [locationRows] = await dbConn.query(
+      'SELECT clientid FROM Clientlocations WHERE id = ?',
+      [clientlocationid]
+    );
+    if (!locationRows.length) {
+      return res.status(400).json({ message: 'Invalid client location' });
+    }
+    const clientid = locationRows[0].clientid;
+
+    // Check user access to this client (removed deletedat check)
+    const [userClientRows] = await dbConn.query(
+      'SELECT 1 FROM Userclients WHERE userid = ? AND clientid = ?',
+      [createdbyid, clientid]
+    );
+    if (!userClientRows.length) {
+      return res.status(403).json({ message: 'User not authorized for this client' });
+    }
+
+    // Validate qualification
+    const [qualRows] = await dbConn.query(
+      'SELECT 1 FROM Lookups WHERE id = ? AND Typeid = (SELECT ID FROM Lookuptypes WHERE Name = \'Qualification\')',
+      [qualificationid]
+    );
+    if (!qualRows.length) {
+      return res.status(400).json({ message: 'Invalid qualification' });
+    }
+
+    // 2. Insert into Clientshiftrequests
+    const [result] = await dbConn.query(
+      `INSERT INTO Clientshiftrequests
+        (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid]
+    );
+    const clientshiftrequestid = result.insertId;
+
+    // 3. Insert into Clientstaffshifts (one row per required staff)
+    const staffShiftInserts = [];
+    for (let i = 1; i <= totalrequiredstaffnumber; i++) {
+      staffShiftInserts.push([
+        clientshiftrequestid,
+        clientid,
+        i,
+        now,
+        createdbyid,
+        now,
+        updatedbyid
+      ]);
+    }
+    if (staffShiftInserts.length) {
+      await dbConn.query(
+        'INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, `Order`, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ?',
+        [staffShiftInserts]
+      );
+    }
+
+    // 4. Return the created shift request and staff shifts
+    const [createdShift] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [clientshiftrequestid]);
+    const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
+    res.status(201).json({
+      message: 'Shift request created',
+      shift: createdShift[0],
+      staffShifts: createdStaffShifts
+    });
+  } catch (err) {
+    console.error('Create shift request error:', err);
+    res.status(500).json({ message: 'Create shift request error', error: err });
+  }
+};
+
+// Link a client user to a location (can only be done by Staff - Standard User or System Admin)
+exports.linkClientUserToLocation = async (req, res) => {
+  const { userid, clientlocationid } = req.body;
+  const requesterType = req.user?.usertype;
+
+  // Only Staff - Standard User or System Admin can use this endpoint
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can link users to locations.' });
+  }
+
+  try {
+    // Check if the user is a client user
+    const [userRows] = await db.query(
+      `SELECT u.id, ut.Name as usertype FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.id = ?`,
+      [userid]
+    );
+    if (!userRows.length || userRows[0].usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+
+    // Get clientid from the location
+    const [locationRows] = await db.query(
+      'SELECT clientid FROM Clientlocations WHERE id = ?',
+      [clientlocationid]
+    );
+    if (!locationRows.length) {
+      return res.status(400).json({ message: 'Invalid client location.' });
+    }
+    const clientid = locationRows[0].clientid;
+
+    // Link user to client in Userclients if not already linked
+    const [existing] = await db.query(
+      'SELECT * FROM Userclients WHERE userid = ? AND clientid = ?',
+      [userid, clientid]
+    );
+    if (existing.length) {
+      return res.status(200).json({ message: 'User is already linked to this client.' });
+    }
+    await db.query(
+      'INSERT INTO Userclients (userid, clientid) VALUES (?, ?)',
+      [userid, clientid]
+    );
+    res.status(201).json({ message: 'User linked to client for this location.' });
+  } catch (err) {
+    console.error('Link client user to location error:', err);
+    res.status(500).json({ message: 'Link client user to location error', error: err });
+  }
+};
+
+

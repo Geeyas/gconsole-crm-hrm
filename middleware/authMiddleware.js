@@ -21,8 +21,26 @@ const authorizeManager = (req, res, next) => {
   next();
 };
 
+// Middleware to allow only client users to raise shift requests
+const authorizeClient = (req, res, next) => {
+  if (req.user?.usertype !== 'Client - Standard User' && req.user?.usertype !== 'System Admin') {
+    return res.status(403).json({ message: "Access denied: Clients only" });
+  }
+  next();
+};
+
+// Middleware to allow only staff or system admin
+const authorizeStaffOrAdmin = (req, res, next) => {
+  if (req.user?.usertype !== 'Staff - Standard User' && req.user?.usertype !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin allowed.' });
+  }
+  next();
+};
+
 module.exports = {
   authenticate,
-  authorizeManager
+  authorizeManager,
+  authorizeClient,
+  authorizeStaffOrAdmin
 };
 
