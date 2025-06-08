@@ -152,21 +152,29 @@ exports.register = async (req, res) => {
 };
 
 exports.updatePassword = async (req, res) => {
-  const { username, oldPassword, newPassword } = req.body;
+  const { username, newPassword } = req.body;
   const updaterId = req.user?.id;
 
-  if (!username || !oldPassword || !newPassword)
+  // Only Staff - Standard User or System Admin can update passwords
+  if (req.user?.usertype !== 'Staff - Standard User' && req.user?.usertype !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can update passwords.' });
+  }
+
+  // Defensive: Accept both application/json and urlencoded
+  if (!username || !newPassword) {
+    // Try to parse from req.body if nested (sometimes body is {body: {username, newPassword}})
+    if (req.body.body && req.body.body.username && req.body.body.newPassword) {
+      req.body = req.body.body;
+    }
+  }
+
+  if (!username || !newPassword)
     return res.status(400).json({ message: 'Missing fields' });
 
   try {
     const [results] = await db.query('SELECT * FROM Users WHERE username = ?', [username]);
     if (results.length === 0)
       return res.status(404).json({ message: 'User not found' });
-
-    const user = results[0];
-    const oldHash = hashPassword(oldPassword, user.salt);
-    if (oldHash !== user.passwordhash)
-      return res.status(401).json({ message: 'Old password is incorrect' });
 
     const newSalt = generateSalt();
     const newHash = hashPassword(newPassword, newSalt);

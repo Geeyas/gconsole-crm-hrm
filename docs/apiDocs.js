@@ -17,8 +17,14 @@ const apiDocs = [
   {
     method: 'PUT',
     path: '/api/update-password',
-    description: 'Updates user password',
-    bodyParams: ['username', 'oldPassword', 'newPassword']
+    description: 'Updates user password. Only accessible by Staff - Standard User or System Admin. Requires username and newPassword fields.',
+    bodyParams: ['username', 'newPassword'],
+    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    example: {
+      "username": "user@example.com",
+      "newPassword": "NewPassword123"
+    },
+    NOTE: 'This endpoint allows staff or admin to reset a user password without requiring the old password. Only staff or admin can perform this action.'
   },
   {
     method: 'GET',
