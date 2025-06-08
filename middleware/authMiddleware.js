@@ -41,18 +41,27 @@ const authorizeClient = (req, res, next) => {
   next();
 };
 
-// Middleware to allow only staff or system admin
+// Only allow staff or admin
 const authorizeStaffOrAdmin = (req, res, next) => {
-  if (req.user?.usertype !== 'Staff - Standard User' && req.user?.usertype !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin allowed.' });
+  if (req.user && (req.user.usertype === 'Staff - Standard User' || req.user.usertype === 'System Admin')) {
+    return next();
   }
-  next();
+  return res.status(403).json({ message: 'Access denied: Staff or admin only.' });
+};
+
+// Only allow admin
+const authorizeAdmin = (req, res, next) => {
+  if (req.user && req.user.usertype === 'System Admin') {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied: Admin only.' });
 };
 
 module.exports = {
   authenticate,
   authorizeManager,
   authorizeClient,
-  authorizeStaffOrAdmin
+  authorizeStaffOrAdmin,
+  authorizeAdmin
 };
 

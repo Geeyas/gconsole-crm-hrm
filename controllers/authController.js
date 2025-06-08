@@ -282,7 +282,7 @@ exports.updateUserProfile = async (req, res) => {
 
 // Create a client shift request and related staff shifts
 exports.createClientShiftRequest = async (req, res) => {
-  const dbConn = db; // Use your db connection
+  const dbConn = db;
   const {
     clientlocationid,
     shiftdate,
@@ -292,13 +292,13 @@ exports.createClientShiftRequest = async (req, res) => {
     totalrequiredstaffnumber,
     additionalvalue
   } = req.body;
-  const createdbyid = req.user?.id || req.body.createdbyid; // Get from auth middleware or body
+  const createdbyid = req.user?.id || req.body.createdbyid;
   const updatedbyid = createdbyid;
   const now = new Date();
+  const userType = req.user?.usertype;
 
-  // 1. Validate client access for this user
   try {
-    // Get clientid from Clientlocations (remove deletedat check)
+    // Get clientid from Clientlocations
     const [locationRows] = await dbConn.query(
       'SELECT clientid FROM Clientlocations WHERE id = ?',
       [clientlocationid]
@@ -308,14 +308,17 @@ exports.createClientShiftRequest = async (req, res) => {
     }
     const clientid = locationRows[0].clientid;
 
-    // Check user access to this client (removed deletedat check)
-    const [userClientRows] = await dbConn.query(
-      'SELECT 1 FROM Userclients WHERE userid = ? AND clientid = ?',
-      [createdbyid, clientid]
-    );
-    if (!userClientRows.length) {
-      return res.status(403).json({ message: 'User not authorized for this client' });
+    // ENFORCE: Client users can only raise shifts for their assigned locations
+    if (userType === 'Client - Standard User') {
+      const [userClientRows] = await dbConn.query(
+        'SELECT 1 FROM Userclients WHERE userid = ? AND clientid = ?',
+        [createdbyid, clientid]
+      );
+      if (!userClientRows.length) {
+        return res.status(403).json({ message: 'Client user not authorized for this client/location' });
+      }
     }
+    // Staff - Standard User and System Admin can raise for any location (no restriction)
 
     // Validate qualification
     const [qualRows] = await dbConn.query(
@@ -326,7 +329,7 @@ exports.createClientShiftRequest = async (req, res) => {
       return res.status(400).json({ message: 'Invalid qualification' });
     }
 
-    // 2. Insert into Clientshiftrequests
+    // Insert into Clientshiftrequests
     const [result] = await dbConn.query(
       `INSERT INTO Clientshiftrequests
         (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
@@ -335,13 +338,14 @@ exports.createClientShiftRequest = async (req, res) => {
     );
     const clientshiftrequestid = result.insertId;
 
-    // 3. Insert into Clientstaffshifts (one row per required staff)
+    // Insert into Clientstaffshifts (one row per required staff)
     const staffShiftInserts = [];
     for (let i = 1; i <= totalrequiredstaffnumber; i++) {
       staffShiftInserts.push([
         clientshiftrequestid,
         clientid,
         i,
+        'open', // Status
         now,
         createdbyid,
         now,
@@ -350,12 +354,12 @@ exports.createClientShiftRequest = async (req, res) => {
     }
     if (staffShiftInserts.length) {
       await dbConn.query(
-        'INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, `Order`, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ?',
+        'INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, `Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ?',
         [staffShiftInserts]
       );
     }
 
-    // 4. Return the created shift request and staff shifts
+    // Return the created shift request and staff shifts
     const [createdShift] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [clientshiftrequestid]);
     const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
     res.status(201).json({
@@ -418,6 +422,123 @@ exports.linkClientUserToLocation = async (req, res) => {
   } catch (err) {
     console.error('Link client user to location error:', err);
     res.status(500).json({ message: 'Link client user to location error', error: err });
+  }
+};
+
+// Get available client shifts for staff (using Assignedtouserid and Isadminapproved)
+exports.getAvailableClientShifts = async (req, res) => {
+  const staffUserId = req.user?.id;
+  const staffUsertype = req.user?.usertype;
+  if (staffUsertype !== 'Staff - Standard User' && staffUsertype !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can view available shifts.' });
+  }
+  try {
+    // Only show shifts with Status 'open' (not assigned, not pending/approved)
+    const [rows] = await db.query(`
+      SELECT csf.*, csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, csr.Clientlocationid
+      FROM Clientstaffshifts csf
+      JOIN Clientshiftrequests csr ON csf.Clientshiftrequestid = csr.id
+      WHERE csf.Status = 'open'
+    `);
+    res.status(200).json({ availableShifts: rows });
+  } catch (err) {
+    console.error('Get available client shifts error:', err);
+    res.status(500).json({ message: 'Error fetching available shifts', error: err });
+  }
+};
+
+// Staff accepts a client staff shift (set Assignedtouserid, Isadminapproved=0, Status='pending approval')
+exports.acceptClientStaffShift = async (req, res) => {
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  const shiftId = req.params.id;
+  // Allow Employee - Standard User, Staff - Standard User, and System Admin
+  if (userType !== 'Employee - Standard User' && userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can accept shifts.' });
+  }
+  try {
+    // Check if shift is available
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+    const shift = rows[0];
+    if (shift.Assignedtouserid && shift.Assignedtouserid !== 0) {
+      return res.status(400).json({ message: 'Shift already assigned' });
+    }
+    if (shift.Isadminapproved && shift.Isadminapproved !== 0) {
+      return res.status(400).json({ message: 'Shift already admin approved' });
+    }
+    // Assign user, set Isadminapproved to 0 (pending approval), and Status to 'pending approval'
+    await db.query(
+      'UPDATE Clientstaffshifts SET Assignedtouserid = ?, Isadminapproved = 0, Status = \'pending approval\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
+      [userId, userId, shiftId]
+    );
+    // TODO: Notify admin for approval
+    res.status(200).json({ message: 'Shift accepted and pending admin approval' });
+  } catch (err) {
+    console.error('Accept client staff shift error:', err);
+    res.status(500).json({ message: 'Error accepting shift', error: err });
+  }
+};
+
+// Admin approves a client staff shift (set Isadminapproved=1, Adminapprovedat=NOW(), Status='approved')
+exports.approveClientStaffShift = async (req, res) => {
+  const adminUserId = req.user?.id;
+  const adminUsertype = req.user?.usertype;
+  const shiftId = req.params.id;
+  if (adminUsertype !== 'System Admin' && adminUsertype !== 'Staff - Standard User') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can approve shifts.' });
+  }
+  try {
+    // Check if shift is pending admin approval
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+    const shift = rows[0];
+    if (!shift.Assignedtouserid || shift.Assignedtouserid === 0) {
+      return res.status(400).json({ message: 'Shift has not been accepted by staff' });
+    }
+    if (shift.Isadminapproved && shift.Isadminapproved !== 0) {
+      return res.status(400).json({ message: 'Shift already admin approved' });
+    }
+    // Approve shift: set Isadminapproved=1, Adminapprovedat=NOW(), Status='approved'
+    await db.query(
+      'UPDATE Clientstaffshifts SET Isadminapproved = 1, Adminapprovedat = NOW(), Status = \'approved\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
+      [adminUserId, shiftId]
+    );
+    // TODO: Notify staff and client
+    res.status(200).json({ message: 'Shift approved' });
+  } catch (err) {
+    console.error('Approve client staff shift error:', err);
+    res.status(500).json({ message: 'Error approving shift', error: err });
+  }
+};
+
+// Admin rejects a client staff shift (set Assignedtouserid = NULL, Isadminapproved = 0, Status = 'open')
+exports.rejectClientStaffShift = async (req, res) => {
+  const adminUserId = req.user?.id;
+  const adminUsertype = req.user?.usertype;
+  const shiftId = req.params.id;
+  if (adminUsertype !== 'System Admin' && adminUsertype !== 'Staff - Standard User') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can reject shifts.' });
+  }
+  try {
+    // Check if shift exists
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+    // Reject shift: set Assignedtouserid = NULL, Isadminapproved = 0, Status = 'open'
+    await db.query(
+      'UPDATE Clientstaffshifts SET Assignedtouserid = NULL, Isadminapproved = 0, Status = \'open\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
+      [adminUserId, shiftId]
+    );
+    res.status(200).json({ message: 'Shift rejected and reopened' });
+  } catch (err) {
+    console.error('Reject client staff shift error:', err);
+    res.status(500).json({ message: 'Error rejecting shift', error: err });
   }
 };
 
