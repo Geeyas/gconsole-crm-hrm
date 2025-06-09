@@ -433,6 +433,32 @@ exports.linkClientUserToLocation = async (req, res) => {
   }
 };
 
+// Get client locations assigned to the logged-in client user
+exports.getMyClientLocations = async (req, res) => {
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  if (userType !== 'Client - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Clients only' });
+  }
+  try {
+    // Get all clientids for this user from Userclients
+    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
+    if (!clientRows.length) {
+      return res.status(200).json({ locations: [] });
+    }
+    const clientIds = clientRows.map(row => row.clientid);
+    // Get all locations for these clientids
+    const [locations] = await db.query(
+      `SELECT * FROM Clientlocations WHERE clientid IN (${clientIds.map(() => '?').join(',')})`,
+      clientIds
+    );
+    res.status(200).json({ locations });
+  } catch (err) {
+    console.error('Get my client locations error:', err);
+    res.status(500).json({ message: 'Error fetching client locations', error: err });
+  }
+};
+
 // Get available client shifts for staff (using Assignedtouserid and Isadminapproved)
 exports.getAvailableClientShifts = async (req, res) => {
   const staffUserId = req.user?.id;
@@ -547,6 +573,32 @@ exports.rejectClientStaffShift = async (req, res) => {
   } catch (err) {
     console.error('Reject client staff shift error:', err);
     res.status(500).json({ message: 'Error rejecting shift', error: err });
+  }
+};
+
+// Get client locations assigned to the logged-in client user
+exports.getMyClientLocations = async (req, res) => {
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  if (userType !== 'Client - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Clients only' });
+  }
+  try {
+    // Get all clientids for this user from Userclients
+    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
+    if (!clientRows.length) {
+      return res.status(200).json({ locations: [] });
+    }
+    const clientIds = clientRows.map(row => row.clientid);
+    // Get all locations for these clientids
+    const [locations] = await db.query(
+      `SELECT * FROM Clientlocations WHERE clientid IN (${clientIds.map(() => '?').join(',')})`,
+      clientIds
+    );
+    res.status(200).json({ locations });
+  } catch (err) {
+    console.error('Get my client locations error:', err);
+    res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
 

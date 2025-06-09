@@ -40,6 +40,8 @@ router.post('/register', authenticate, authController.register);
 router.post('/clientshiftrequests', authenticate, authorizeClient, authController.createClientShiftRequest);
 router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, authController.linkClientUserToLocation);
 
+// Client: View only their assigned locations
+router.get('/my-client-locations', authenticate, authController.getMyClientLocations);
 
 router.put('/update-password', authenticate, authController.updatePassword);
 router.put('/people/:id', authenticate, authorizeManager, authController.updateUserProfile);

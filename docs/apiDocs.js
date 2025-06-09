@@ -108,6 +108,36 @@ const apiDocs = [
     }
   },
   {
+    method: 'GET',
+    path: '/api/my-client-locations',
+    description: 'Client: View only the locations assigned to the logged-in client user. Returns all Clientlocations for the client(s) this user is linked to via Userclients.',
+    userType: ['Client - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Client - Standard User or System Admin)'],
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'List of assigned client locations',
+        body: {
+          locations: [
+            {
+              id: 9,
+              clientid: 3,
+              locationaddress: '123 Main St',
+              // ...other fields from Clientlocations...
+            },
+            // ...more locations if user is linked to multiple clients...
+          ]
+        }
+      },
+      403: 'Access denied'
+    },
+    NOTE: 'This endpoint returns only the locations (from Clientlocations) for the client(s) the logged-in user is linked to in Userclients. If the user is not linked to any client, an empty array is returned. The response fields match the Clientlocations table.'
+  },
+  {
     method: 'POST',
     path: '/api/clientshiftrequests',
     description: 'Creates a new client shift request and related staff shift slots. Client users can only raise shifts for their assigned locations. Admin staff (Staff - Standard User) and System Admin can raise shifts for any location.',
