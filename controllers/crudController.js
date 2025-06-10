@@ -31,12 +31,29 @@ exports.getAllPaginated = async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    // Get total count
-    const [countResult] = await db.query(`SELECT COUNT(*) as total FROM ??`, [table]);
-    const total = countResult[0]?.total || 0;
-
-    // Get paginated data
-    const [results] = await db.query(`SELECT * FROM ?? LIMIT ? OFFSET ?`, [table, limit, offset]);
+    let results, total;
+    if (table.toLowerCase() === 'people') {
+      // Get total count from People
+      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM People`);
+      total = countResult[0]?.total || 0;
+      // Get paginated People with joined Users and Usertype
+      [results] = await db.query(`
+        SELECT 
+          p.*, 
+          u.id AS user_id, u.username, u.email, u.fullname, u.Deletedat AS user_Deletedat, u.Deletedbyid AS user_Deletedbyid,
+          ut.ID AS usertype_id, ut.Name AS usertype_name
+        FROM People p
+        LEFT JOIN Users u ON p.Linkeduserid = u.id
+        LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+        LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+        LIMIT ? OFFSET ?
+      `, [limit, offset]);
+    } else {
+      // Generic for other tables
+      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM ??`, [table]);
+      total = countResult[0]?.total || 0;
+      [results] = await db.query(`SELECT * FROM ?? LIMIT ? OFFSET ?`, [table, limit, offset]);
+    }
     res.status(200).json({
       data: results,
       pagination: {

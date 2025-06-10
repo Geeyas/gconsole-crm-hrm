@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crudController = require('../controllers/crudController');
 
+// router.get('/:table/paginated', crudController.getAllPaginated);
 router.get('/:table/paginated', crudController.getAllPaginated);
 router.get('/:table', crudController.getAll);
 router.get('/:table/:id', crudController.getOne);
