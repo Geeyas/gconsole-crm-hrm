@@ -485,8 +485,8 @@ exports.getMyClientLocations = async (req, res) => {
     const userInfo = userDetails[0] || {};
     // Attach user info to each location for clarity
     const result = locations.map(loc => ({
-      locationid: loc.ID,
-      locationname: loc.LocationName, // Use the correct field from Clientlocations
+      ID: loc.ID,
+      LocationName: loc.LocationName, // Use the correct field from Clientlocations
       clientid: loc.clientid,
       clientname: loc.clientname,
       useremail: userInfo.email,
