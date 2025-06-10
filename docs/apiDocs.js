@@ -68,8 +68,8 @@ const apiDocs = [
   {
     method: 'PUT',
     path: '/api/people/:id',
-    description: 'Updates the People record for a user and reflects relevant changes to the Users table (e.g., fullname, email). Only accessible by Staff - Standard User or System Admin.',
-    urlParams: ['id'],
+    description: 'Updates the People record for a user and reflects relevant changes to the Users table (e.g., fullname, email, username). Only accessible by Staff - Standard User or System Admin. Will fail if the People record is soft-deleted (deletedat is not null).',
+    urlParams: ['id (People table ID)'],
     bodyParams: [
       'Firstname',
       'Lastname',
@@ -86,7 +86,34 @@ const apiDocs = [
       'BSB',
       'Bankaccountnumber',
     ],
-    NOTE: 'The :id is the Linkeduserid from the People table. The API updates People data and updates corresponding Users fields fullname and email accordingly. Requires Authorization header with a valid JWT token belonging to either Staff - Standard User or System Admin.'
+    example: {
+      request: {
+        url: '/api/people/52',
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer <JWT token>',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          "Firstname": "Test",
+          "Lastname": "User",
+          "Emailaddress": "testuser@example.com",
+          "Middlename": "",
+          "Preferredname": "",
+          "Country": "Australia",
+          "State": "NSW",
+          "Suburb": "Sydney",
+          "Postcode": "2000",
+          "HomeAddress": "123 Main St",
+          "Workaddress": "456 Work St",
+          "TFN": "123456789",
+          "BSB": "123-456",
+          "Bankaccountnumber": "12345678"
+        }
+      },
+      note: 'The :id in the URL is the People table ID, not the Users table ID.'
+    },
+    NOTE: 'The :id is the People table ID. The API updates People data and updates corresponding Users fields (fullname, email, username) accordingly. Requires Authorization header with a valid JWT token belonging to either Staff - Standard User or System Admin. The Users table email and username will always be set to the Emailaddress value from People. If the People record is soft-deleted (deletedat is not null), the update will be blocked with a clear error.'
   },
   {
     method: 'GET',

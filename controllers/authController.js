@@ -233,9 +233,10 @@ exports.getUsertypeByPersonId = async (req, res) => {
 };
 
 exports.updateUserProfile = async (req, res) => {
-  const targetUserId = req.params.id;
+  const personId = req.params.id;
   const updaterId = req.user?.id;
 
+  // Extract all fields for People table
   const {
     Firstname,
     Lastname,
@@ -254,37 +255,47 @@ exports.updateUserProfile = async (req, res) => {
   } = req.body;
 
   try {
-    // Check if user exists in People table
-    const [personRows] = await db.query(`SELECT * FROM People WHERE ID = ?`, [targetUserId]);
-
+    // Check if person exists in People table
+    const [personRows] = await db.query(`SELECT * FROM People WHERE ID = ?`, [personId]);
     if (personRows.length === 0) {
       return res.status(404).json({ message: 'User not found in People table' });
     }
+    // Debug: log all keys and values to diagnose case-sensitivity
+    console.log('[updateUserProfile] personRows[0] keys/values:', Object.entries(personRows[0]));
+    // Print type and value for deletedAt for deep debugging
+    const deletedAt = personRows[0].Deletedat || personRows[0].deletedat || personRows[0].DELETEDAT;
+    console.log('[updateUserProfile] typeof deletedAt:', typeof deletedAt, 'value:', deletedAt);
+    if (deletedAt !== null && deletedAt !== undefined && String(deletedAt).trim() !== '') {
+      return res.status(400).json({ message: 'Cannot update a soft-deleted person.' });
+    }
+    const linkedUserId = personRows[0].Linkeduserid;
 
+    // Update People table
     await db.query(
       `UPDATE People SET
         Firstname = ?, Lastname = ?, Middlename = ?, Preferredname = ?, Emailaddress = ?, 
         Country = ?, State = ?, Suburb = ?, Postcode = ?, HomeAddress = ?, Workaddress = ?, 
         TFN = ?, BSB = ?, Bankaccountnumber = ?, 
         Updatedat = NOW(), Updatedbyid = ?
-       WHERE Linkeduserid = ?`,
+       WHERE ID = ?`,
       [
         Firstname, Lastname, Middlename, Preferredname, Emailaddress,
         Country, State, Suburb, Postcode, HomeAddress, Workaddress,
         TFN, BSB, Bankaccountnumber,
-        updaterId, targetUserId
+        updaterId, personId
       ]
     );
 
-    const fullname = `${Firstname} ${Lastname}`;
-    await db.query(
-      `UPDATE Users SET fullname = ?, email = ?, updatedat = NOW(), updatedbyid = ?
-       WHERE id = ?`,
-      [fullname, Emailaddress, updaterId, targetUserId]
-    );
+    // If linked user exists, update Users table as well
+    if (linkedUserId) {
+      const fullname = `${Firstname} ${Lastname}`;
+      await db.query(
+        `UPDATE Users SET fullname = ?, email = ?, username = ?, updatedat = NOW(), updatedbyid = ? WHERE id = ?`,
+        [fullname, Emailaddress, Emailaddress, updaterId, linkedUserId]
+      );
+    }
 
     res.status(200).json({ message: 'User profile updated successfully' });
-
   } catch (err) {
     console.error('Update error:', err);
     res.status(500).json({ message: 'Failed to update profile', error: err.message });

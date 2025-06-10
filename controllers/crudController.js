@@ -133,3 +133,41 @@ exports.remove = async (req, res) => {
     res.status(500).json({ message: 'Delete error', error: err });
   }
 };
+
+// Get paginated People with joined Users and Usertype info
+exports.getPeoplePaginated = async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  const page = parseInt(req.query.page) || 1;
+  const offset = (page - 1) * limit;
+
+  try {
+    // Get total count from People
+    const [countResult] = await db.query(`SELECT COUNT(*) as total FROM People`);
+    const total = countResult[0]?.total || 0;
+
+    // Get paginated People with joined Users and Usertype
+    const [results] = await db.query(`
+      SELECT 
+        p.*, 
+        u.id AS user_id, u.username, u.email, u.fullname, u.Deletedat AS user_Deletedat, u.Deletedbyid AS user_Deletedbyid,
+        ut.ID AS usertype_id, ut.Name AS usertype_name
+      FROM People p
+      LEFT JOIN Users u ON p.Linkeduserid = u.id
+      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
+
+    res.status(200).json({
+      data: results,
+      pagination: {
+        page,
+        limit,
+        total
+      }
+    });
+  } catch (err) {
+    console.error('Fetch People paginated error:', err);
+    res.status(500).json({ message: 'Fetch error', error: err });
+  }
+};
