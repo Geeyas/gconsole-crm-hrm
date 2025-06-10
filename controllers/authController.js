@@ -397,7 +397,7 @@ exports.createClientShiftRequest = async (req, res) => {
 
 // Link a client user to a location (can only be done by Staff - Standard User or System Admin)
 exports.linkClientUserToLocation = async (req, res) => {
-  const { userid, clientlocationid } = req.body;
+  const { emailaddress, clientlocationid } = req.body;
   const requesterType = req.user?.usertype;
 
   // Only Staff - Standard User or System Admin can use this endpoint
@@ -406,17 +406,22 @@ exports.linkClientUserToLocation = async (req, res) => {
   }
 
   try {
-    // Check if the user is a client user
+    // Look up the user by emailaddress
     const [userRows] = await db.query(
-      `SELECT u.id, ut.Name as usertype FROM Users u
+      `SELECT u.id, u.email, ut.Name as usertype FROM Users u
        LEFT JOIN Assignedusertypes au ON au.Userid = u.id
        LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-       WHERE u.id = ?`,
-      [userid]
+       WHERE u.email = ?`,
+      [emailaddress]
     );
-    if (!userRows.length || userRows[0].usertype !== 'Client - Standard User') {
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
       return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
     }
+    const userid = user.id;
 
     // Get clientid from the location
     const [locationRows] = await db.query(
