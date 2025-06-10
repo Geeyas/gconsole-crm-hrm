@@ -255,7 +255,7 @@ exports.updateUserProfile = async (req, res) => {
 
   try {
     // Check if user exists in People table
-    const [personRows] = await db.query(`SELECT * FROM People WHERE Linkeduserid = ?`, [targetUserId]);
+    const [personRows] = await db.query(`SELECT * FROM People WHERE ID = ?`, [targetUserId]);
 
     if (personRows.length === 0) {
       return res.status(404).json({ message: 'User not found in People table' });
