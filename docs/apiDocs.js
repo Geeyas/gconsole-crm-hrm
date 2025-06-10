@@ -265,6 +265,25 @@ const apiDocs = [
       "message": "Shift rejected and reopened"
     },
     NOTE: 'This endpoint is used by staff or admin to reject a shift that was accepted by an employee. The shift will be reset to open and can be accepted by another employee.'
+  },
+  {
+    method: 'DELETE',
+    path: '/api/People/:id',
+    description: 'Soft-deletes a person in the People table by setting deletedat and deletedbyid. Requires authentication. :id is the People table ID.',
+    urlParams: ['id'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    NOTE: 'This endpoint does not hard-delete the record. It sets deletedat to the current date/time and deletedbyid to the user ID from the JWT. Returns 404 if the person is not found.',
+    example: {
+      request: {
+        headers: {
+          'Authorization': 'Bearer <JWT token>'
+        }
+      },
+      response: {
+        200: { message: 'Person soft-deleted' },
+        404: { message: 'Person not found' }
+      }
+    }
   }
 
 ];

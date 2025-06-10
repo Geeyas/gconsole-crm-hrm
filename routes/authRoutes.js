@@ -62,5 +62,8 @@ router.post('/clientstaffshifts/:id/approve', authenticate, authorizeStaffOrAdmi
 // Staff or Admin: Reject a client staff shift
 router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin, authController.rejectClientStaffShift);
 
+// Soft-delete a person (People table) by setting deletedat and deletedbyid
+router.delete('/People/:id', authenticate, authController.softDeletePerson);
+
 module.exports = router;
 

@@ -24,6 +24,9 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid username or password' });
 
     const user = results[0];
+    if (user.deletedat) {
+      return res.status(403).json({ message: 'User account has been deleted' });
+    }
     const hashedInput = hashPassword(password, user.salt);
     if (hashedInput !== user.passwordhash)
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -599,6 +602,46 @@ exports.getMyClientLocations = async (req, res) => {
   } catch (err) {
     console.error('Get my client locations error:', err);
     res.status(500).json({ message: 'Error fetching client locations', error: err });
+  }
+};
+
+// Soft-delete a person (People table) by setting deletedat and deletedbyid
+exports.softDeletePerson = async (req, res) => {
+  const personId = req.params.id;
+  const deleterId = req.user?.id;
+  if (!deleterId) {
+    return res.status(401).json({ message: 'Unauthorized. No user info.' });
+  }
+  try {
+    // Check if person exists
+    const [rows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Person not found' });
+    }
+    // Soft-delete: set deletedat and deletedbyid in People
+    await db.query(
+      'UPDATE People SET deletedat = NOW(), deletedbyid = ? WHERE ID = ?',
+      [deleterId, personId]
+    );
+    // Also soft-delete in Users if Linkeduserid exists
+    const linkedUserId = rows[0].Linkeduserid;
+    if (linkedUserId) {
+      console.log(`[softDeletePerson] Attempting to soft-delete Users.id=${linkedUserId}`);
+      const [userUpdateResult] = await db.query(
+        'UPDATE Users SET Deletedat = NOW(), Deletedbyid = ? WHERE id = ?',
+        [deleterId, linkedUserId]
+      );
+      console.log(`[softDeletePerson] Users update result:`, userUpdateResult);
+      if (userUpdateResult.affectedRows === 0) {
+        console.warn(`[softDeletePerson] WARNING: No rows updated in Users for id=${linkedUserId}`);
+      }
+    } else {
+      console.log(`[softDeletePerson] No linked user for People.id=${personId}`);
+    }
+    res.status(200).json({ message: 'Person soft-deleted (and user if linked)' });
+  } catch (err) {
+    console.error('Soft-delete person error:', err);
+    res.status(500).json({ message: 'Soft-delete error', error: err });
   }
 };
 
