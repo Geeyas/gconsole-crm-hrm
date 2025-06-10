@@ -466,157 +466,81 @@ exports.getMyClientLocations = async (req, res) => {
       return res.status(200).json({ locations: [] });
     }
     const clientIds = clientRows.map(row => row.clientid);
-    // Get all locations for these clientids
+    // Get all locations for these clientids, join with client info
     const [locations] = await db.query(
-      `SELECT * FROM Clientlocations WHERE clientid IN (${clientIds.map(() => '?').join(',')})`,
+      `SELECT cl.*, c.Name as clientname
+       FROM Clientlocations cl
+       LEFT JOIN Clients c ON cl.clientid = c.id
+       WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')})`,
       clientIds
     );
-    res.status(200).json({ locations });
+    // Get user details (email, firstname, lastname) for the current user
+    const [userDetails] = await db.query(
+      `SELECT u.email, p.Firstname, p.Lastname
+       FROM Users u
+       LEFT JOIN People p ON u.id = p.Linkeduserid
+       WHERE u.id = ?`,
+      [userId]
+    );
+    const userInfo = userDetails[0] || {};
+    // Attach user info to each location for clarity
+    const result = locations.map(loc => ({
+      locationid: loc.id,
+      locationname: loc.locationaddress || loc.Name || loc.locationname,
+      clientid: loc.clientid,
+      clientname: loc.clientname,
+      useremail: userInfo.email,
+      userfirstname: userInfo.Firstname,
+      userlastname: userInfo.Lastname
+    }));
+    res.status(200).json({ locations: result });
   } catch (err) {
     console.error('Get my client locations error:', err);
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
 
-// Get available client shifts for staff (using Assignedtouserid and Isadminapproved)
-exports.getAvailableClientShifts = async (req, res) => {
-  const staffUserId = req.user?.id;
-  const staffUsertype = req.user?.usertype;
-  if (staffUsertype !== 'Staff - Standard User' && staffUsertype !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can view available shifts.' });
+// Get all clients and their linked locations (for staff/sys admin)
+exports.getAllClientLocations = async (req, res) => {
+  const userType = req.user?.usertype;
+  if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Staff or admin only' });
   }
   try {
-    // Only show shifts with Status 'open' (not assigned, not pending/approved)
     const [rows] = await db.query(`
-      SELECT csf.*, csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, csr.Clientlocationid
-      FROM Clientstaffshifts csf
-      JOIN Clientshiftrequests csr ON csf.Clientshiftrequestid = csr.id
-      WHERE csf.Status = 'open'
+      SELECT p.Firstname, p.Lastname, p.Emailaddress, cl.locationaddress AS locationname
+      FROM Users u
+      INNER JOIN People p ON u.id = p.Linkeduserid
+      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+      LEFT JOIN Userclients uc ON uc.userid = u.id
+      LEFT JOIN Clientlocations cl ON cl.clientid = uc.clientid
+      WHERE ut.Name = 'Client - Standard User' AND cl.id IS NOT NULL AND p.Emailaddress IS NOT NULL
+      ORDER BY p.Emailaddress, cl.locationaddress
     `);
-    res.status(200).json({ availableShifts: rows });
-  } catch (err) {
-    console.error('Get available client shifts error:', err);
-    res.status(500).json({ message: 'Error fetching available shifts', error: err });
-  }
-};
 
-// Staff accepts a client staff shift (set Assignedtouserid, Isadminapproved=0, Status='pending approval')
-exports.acceptClientStaffShift = async (req, res) => {
-  const userId = req.user?.id;
-  const userType = req.user?.usertype;
-  const shiftId = req.params.id;
-  // Allow Employee - Standard User, Staff - Standard User, and System Admin
-  if (userType !== 'Employee - Standard User' && userType !== 'Staff - Standard User' && userType !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can accept shifts.' });
-  }
-  try {
-    // Check if shift is available
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Shift not found' });
-    }
-    const shift = rows[0];
-    if (shift.Assignedtouserid && shift.Assignedtouserid !== 0) {
-      return res.status(400).json({ message: 'Shift already assigned' });
-    }
-    if (shift.Isadminapproved && shift.Isadminapproved !== 0) {
-      return res.status(400).json({ message: 'Shift already admin approved' });
-    }
-    // Assign user, set Isadminapproved to 0 (pending approval), and Status to 'pending approval'
-    await db.query(
-      'UPDATE Clientstaffshifts SET Assignedtouserid = ?, Isadminapproved = 0, Status = \'pending approval\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
-      [userId, userId, shiftId]
-    );
-    // TODO: Notify admin for approval
-    res.status(200).json({ message: 'Shift accepted and pending admin approval' });
-  } catch (err) {
-    console.error('Accept client staff shift error:', err);
-    res.status(500).json({ message: 'Error accepting shift', error: err });
-  }
-};
+    const clientsMap = new Map();
+    rows.forEach(row => {
+      if (!row.Emailaddress) return; // Should be filtered by SQL, but as a safeguard
 
-// Admin approves a client staff shift (set Isadminapproved=1, Adminapprovedat=NOW(), Status='approved')
-exports.approveClientStaffShift = async (req, res) => {
-  const adminUserId = req.user?.id;
-  const adminUsertype = req.user?.usertype;
-  const shiftId = req.params.id;
-  if (adminUsertype !== 'System Admin' && adminUsertype !== 'Staff - Standard User') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can approve shifts.' });
-  }
-  try {
-    // Check if shift is pending admin approval
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Shift not found' });
-    }
-    const shift = rows[0];
-    if (!shift.Assignedtouserid || shift.Assignedtouserid === 0) {
-      return res.status(400).json({ message: 'Shift has not been accepted by staff' });
-    }
-    if (shift.Isadminapproved && shift.Isadminapproved !== 0) {
-      return res.status(400).json({ message: 'Shift already admin approved' });
-    }
-    // Approve shift: set Isadminapproved=1, Adminapprovedat=NOW(), Status='approved'
-    await db.query(
-      'UPDATE Clientstaffshifts SET Isadminapproved = 1, Adminapprovedat = NOW(), Status = \'approved\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
-      [adminUserId, shiftId]
-    );
-    // TODO: Notify staff and client
-    res.status(200).json({ message: 'Shift approved' });
-  } catch (err) {
-    console.error('Approve client staff shift error:', err);
-    res.status(500).json({ message: 'Error approving shift', error: err });
-  }
-};
+      if (!clientsMap.has(row.Emailaddress)) {
+        clientsMap.set(row.Emailaddress, {
+          Firstname: row.Firstname,
+          Lastname: row.Lastname,
+          Emailaddress: row.Emailaddress,
+          locationnames: []
+        });
+      }
+      if (row.locationname) {
+        clientsMap.get(row.Emailaddress).locationnames.push(row.locationname);
+      }
+    });
 
-// Admin rejects a client staff shift (set Assignedtouserid = NULL, Isadminapproved = 0, Status = 'open')
-exports.rejectClientStaffShift = async (req, res) => {
-  const adminUserId = req.user?.id;
-  const adminUsertype = req.user?.usertype;
-  const shiftId = req.params.id;
-  if (adminUsertype !== 'System Admin' && adminUsertype !== 'Staff - Standard User') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can reject shifts.' });
-  }
-  try {
-    // Check if shift exists
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [shiftId]);
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Shift not found' });
-    }
-    // Reject shift: set Assignedtouserid = NULL, Isadminapproved = 0, Status = 'open'
-    await db.query(
-      'UPDATE Clientstaffshifts SET Assignedtouserid = NULL, Isadminapproved = 0, Status = \'open\', Updatedat = NOW(), Updatedbyid = ? WHERE id = ?',
-      [adminUserId, shiftId]
-    );
-    res.status(200).json({ message: 'Shift rejected and reopened' });
-  } catch (err) {
-    console.error('Reject client staff shift error:', err);
-    res.status(500).json({ message: 'Error rejecting shift', error: err });
-  }
-};
+    const groupedClients = Array.from(clientsMap.values());
+    res.status(200).json({ clients: groupedClients });
 
-// Get client locations assigned to the logged-in client user
-exports.getMyClientLocations = async (req, res) => {
-  const userId = req.user?.id;
-  const userType = req.user?.usertype;
-  if (userType !== 'Client - Standard User' && userType !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Clients only' });
-  }
-  try {
-    // Get all clientids for this user from Userclients
-    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-    if (!clientRows.length) {
-      return res.status(200).json({ locations: [] });
-    }
-    const clientIds = clientRows.map(row => row.clientid);
-    // Get all locations for these clientids
-    const [locations] = await db.query(
-      `SELECT * FROM Clientlocations WHERE clientid IN (${clientIds.map(() => '?').join(',')})`,
-      clientIds
-    );
-    res.status(200).json({ locations });
   } catch (err) {
-    console.error('Get my client locations error:', err);
+    console.error('Get all client locations error:', err);
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
@@ -660,5 +584,58 @@ exports.softDeletePerson = async (req, res) => {
     res.status(500).json({ message: 'Soft-delete error', error: err });
   }
 };
+
+// Staff: View available client shifts
+exports.getAvailableClientShifts = async (req, res) => {
+  // TODO: Implement logic to get available client shifts
+  console.log('[authController] getAvailableClientShifts called');
+  try {
+    // Placeholder: Return empty array or a 501 Not Implemented
+    res.status(200).json({ availableShifts: [] });
+    // Or: res.status(501).json({ message: 'Not Implemented: getAvailableClientShifts' });
+  } catch (err) {
+    console.error('Get available client shifts error:', err);
+    res.status(500).json({ message: 'Error fetching available client shifts', error: err });
+  }
+};
+
+// Staff: Accept a client staff shift
+exports.acceptClientStaffShift = async (req, res) => {
+  // TODO: Implement logic to accept a client staff shift
+  console.log('[authController] acceptClientStaffShift called for shift ID:', req.params.id);
+  try {
+    res.status(200).json({ message: 'Shift accepted (placeholder)', shiftId: req.params.id });
+  } catch (err) {
+    console.error('Accept client staff shift error:', err);
+    res.status(500).json({ message: 'Error accepting client staff shift', error: err });
+  }
+};
+
+// Staff or Admin: Approve a client staff shift
+exports.approveClientStaffShift = async (req, res) => {
+  // TODO: Implement logic to approve a client staff shift
+  console.log('[authController] approveClientStaffShift called for shift ID:', req.params.id);
+  try {
+    res.status(200).json({ message: 'Shift approved (placeholder)', shiftId: req.params.id });
+  } catch (err) {
+    console.error('Approve client staff shift error:', err);
+    res.status(500).json({ message: 'Error approving client staff shift', error: err });
+  }
+};
+
+// Staff or Admin: Reject a client staff shift
+exports.rejectClientStaffShift = async (req, res) => {
+  // TODO: Implement logic to reject a client staff shift
+  console.log('[authController] rejectClientStaffShift called for shift ID:', req.params.id);
+  try {
+    res.status(200).json({ message: 'Shift rejected (placeholder)', shiftId: req.params.id });
+  } catch (err) {
+    console.error('Reject client staff shift error:', err);
+    res.status(500).json({ message: 'Error rejecting client staff shift', error: err });
+  }
+};
+
+console.log('Type of exports.getAllClientLocations in authController after definition:', typeof exports.getAllClientLocations);
+console.log('All exports from authController at end of file:', Object.keys(exports));
 
 

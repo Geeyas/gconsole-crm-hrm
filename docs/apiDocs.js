@@ -350,6 +350,50 @@ const apiDocs = [
         404: { message: 'Person not found' }
       }
     }
+  },
+  {
+    method: 'GET',
+    path: '/api/all-client-locations',
+    description: 'Staff/Admin: Get a list of all unique client users, with each client having an array of their linked location names. Returns each client user (Firstname, Lastname, Emailaddress) and an array of their location names.',
+    userType: ['Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token for Staff - Standard User or System Admin>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'List of unique clients, each with an array of their linked location names.',
+        body: {
+          clients: [
+            {
+              Firstname: 'John',
+              Lastname: 'Doe',
+              Emailaddress: 'john.doe@example.com',
+              locationnames: ['123 Main St', '456 Oak Ave']
+            },
+            {
+              Firstname: 'Jane',
+              Lastname: 'Smith',
+              Emailaddress: 'jane.smith@example.com',
+              locationnames: ['789 Pine Ln']
+            }
+            // ...more unique clients...
+          ]
+        }
+      },
+      403: 'Access denied'
+    },
+    NOTE: `
+      - This endpoint is only accessible by users with usertype \\'Staff - Standard User\\' or \\'System Admin\\'.
+      - Returns a list of unique client users (usertype \\'Client - Standard User\\').
+      - Each client object in the response contains the client\\'s Firstname, Lastname, Emailaddress, and an array called \\'locationnames\\' listing all locations they are linked to.
+      - This format is suitable for displaying clients in a table with a dropdown or list for their multiple locations.
+      - Example cURL:
+        curl -X GET https://your-api-domain/api/all-client-locations \\\\
+          -H "Authorization: Bearer <JWT token for Staff - Standard User or System Admin>"
+    `
   }
 
 ];

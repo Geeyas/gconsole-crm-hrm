@@ -2,6 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+console.log('authController object in authRoutes immediately after require:', authController);
+console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
+
 const { 
   login, 
   refreshToken, 
@@ -15,8 +18,11 @@ const {
   getAvailableClientShifts, 
   acceptClientStaffShift, 
   approveClientStaffShift, 
-  rejectClientStaffShift 
+  rejectClientStaffShift, 
+  getAllClientLocations
 } = require('../controllers/authController');
+console.log('Type of destructured getAllClientLocations in authRoutes:', typeof getAllClientLocations);
+
 const { 
   authenticate, 
   authorizeManager, 
@@ -62,8 +68,15 @@ router.post('/clientstaffshifts/:id/approve', authenticate, authorizeStaffOrAdmi
 // Staff or Admin: Reject a client staff shift
 router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin, authController.rejectClientStaffShift);
 
+// Staff/Admin: Get all clients and their linked locations
+router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, getAllClientLocations); // Changed to use destructured import
+
 // Soft-delete a person (People table) by setting deletedat and deletedbyid
 router.delete('/People/:id', authenticate, authController.softDeletePerson);
+
+console.log('authController:', authController);
+console.log('authController keys:', Object.keys(authController));
+console.log('authController.getAllClientLocations:', typeof authController.getAllClientLocations);
 
 module.exports = router;
 
