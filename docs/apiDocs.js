@@ -230,26 +230,30 @@ const apiDocs = [
   {
     method: 'GET',
     path: '/api/available-client-shifts',
-    description: 'Staff/Admin: View available client shifts. Only shifts with Status = "open" are returned.',
-    userType: ['Staff', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    description: 'View available client shifts. Behavior and data returned depends on user type.',
+    userType: ['Employee - Standard User', 'Client - Standard User', 'Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (required)'],
     response: {
       200: {
-        description: 'List of available shifts',
+        description: 'List of available shifts or shift slots, depending on user type',
         body: {
           availableShifts: [
-            {
-              id: 1,
-              Clientshiftrequestid: 2,
-              Status: 'open',
-              // ...
-            }
+            '// For Staff/Admin: All shifts for all hospitals/locations, grouped with staff requirements and slot status',
+            '// For Client: All shifts for their own hospital(s)/locations, grouped with staff requirements and slot status',
+            '// For Employee: Only open shift slots available to accept'
           ]
         }
       },
       403: 'Access denied'
     },
-    NOTE: 'This endpoint only returns shifts with Status = "open". Shifts that are pending approval or approved are not visible to employees.'
+    NOTE: `
+      - The data returned depends on the user type:
+        * System Admin / Staff - Standard User: Sees all shifts for all hospitals/locations, including total staff required, number of slots filled, and which hospital/location each shift is for.
+        * Client - Standard User: Sees all shifts for their own hospital(s)/locations, including staff requirements and slot status.
+        * Employee - Standard User: Sees only open shift slots they can accept (not grouped, just available slots).
+      - Each shift includes: shift date, start/end time, location, client name, qualification, total staff required, number of open slots, number of filled slots, and status.
+      - This endpoint is useful for displaying shift availability dashboards for each user type.
+    `
   },
   {
     method: 'POST',

@@ -587,55 +587,59 @@ exports.softDeletePerson = async (req, res) => {
 
 // Staff: View available client shifts
 exports.getAvailableClientShifts = async (req, res) => {
-  // TODO: Implement logic to get available client shifts
-  console.log('[authController] getAvailableClientShifts called');
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
   try {
-    // Placeholder: Return empty array or a 501 Not Implemented
-    res.status(200).json({ availableShifts: [] });
-    // Or: res.status(501).json({ message: 'Not Implemented: getAvailableClientShifts' });
-  } catch (err) {
-    console.error('Get available client shifts error:', err);
-    res.status(500).json({ message: 'Error fetching available client shifts', error: err });
-  }
-};
-
-// Staff: Accept a client staff shift
-exports.acceptClientStaffShift = async (req, res) => {
-  // TODO: Implement logic to accept a client staff shift
-  console.log('[authController] acceptClientStaffShift called for shift ID:', req.params.id);
-  try {
-    res.status(200).json({ message: 'Shift accepted (placeholder)', shiftId: req.params.id });
-  } catch (err) {
-    console.error('Accept client staff shift error:', err);
-    res.status(500).json({ message: 'Error accepting client staff shift', error: err });
-  }
-};
-
-// Staff or Admin: Approve a client staff shift
-exports.approveClientStaffShift = async (req, res) => {
-  // TODO: Implement logic to approve a client staff shift
-  console.log('[authController] approveClientStaffShift called for shift ID:', req.params.id);
-  try {
-    res.status(200).json({ message: 'Shift approved (placeholder)', shiftId: req.params.id });
-  } catch (err) {
-    console.error('Approve client staff shift error:', err);
-    res.status(500).json({ message: 'Error approving client staff shift', error: err });
-  }
-};
-
-// Staff or Admin: Reject a client staff shift
-exports.rejectClientStaffShift = async (req, res) => {
-  // TODO: Implement logic to reject a client staff shift
-  console.log('[authController] rejectClientStaffShift called for shift ID:', req.params.id);
-  try {
-    res.status(200).json({ message: 'Shift rejected (placeholder)', shiftId: req.params.id });
-  } catch (err) {
-    console.error('Reject client staff shift error:', err);
-    res.status(500).json({ message: 'Error rejecting client staff shift', error: err });
-  }
-};
-
-console.log('Type of exports.getAllClientLocations in authController after definition:', typeof exports.getAllClientLocations);
-console.log('All exports from authController at end of file:', Object.keys(exports));
+    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      // Admin/Staff: See all shifts for all hospitals/locations
+      const [rows] = await db.query(`
+        SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
+               csr.Totalrequiredstaffnumber,
+               COUNT(css.id) AS total_slots,
+               SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
+               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
+               SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
+        LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
+        GROUP BY csr.id
+        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+      `);
+      return res.status(200).json({ availableShifts: rows });
+    } else if (userType === 'Client - Standard User') {
+      // Client: See all shifts for their own hospital(s)
+      // Get clientids for this user
+      const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
+      if (!clientRows.length) return res.status(200).json({ availableShifts: [] });
+      const clientIds = clientRows.map(r => r.clientid);
+            const [rows] = await db.query(`
+              SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+                     csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
+                     csr.Totalrequiredstaffnumber,
+                     COUNT(css.id) AS total_slots,
+                     SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
+                     SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
+                     SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
+              FROM Clientshiftrequests csr
+              LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+              LEFT JOIN Clients c ON cl.clientid = c.id
+              LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
+              LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
+              WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})
+              GROUP BY csr.id
+              ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+            `, clientIds);
+            return res.status(200).json({ availableShifts: rows });
+          } else {
+            return res.status(403).json({ message: 'Access denied' });
+          }
+        } catch (err) {
+          console.error('Get available client shifts error:', err);
+          res.status(500).json({ message: 'Error fetching available shifts', error: err });
+        }
+      };
 
 
