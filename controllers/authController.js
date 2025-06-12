@@ -587,8 +587,8 @@ exports.softDeletePerson = async (req, res) => {
 
 // Staff: View available client shifts
 exports.getAvailableClientShifts = async (req, res) => {
-  const userId = req.user?.id;
   const userType = req.user?.usertype;
+  const userId = req.user?.id;
   try {
     if (userType === 'System Admin' || userType === 'Staff - Standard User') {
       // Admin/Staff: See all shifts for all hospitals/locations
@@ -611,35 +611,49 @@ exports.getAvailableClientShifts = async (req, res) => {
       return res.status(200).json({ availableShifts: rows });
     } else if (userType === 'Client - Standard User') {
       // Client: See all shifts for their own hospital(s)
-      // Get clientids for this user
       const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
       if (!clientRows.length) return res.status(200).json({ availableShifts: [] });
       const clientIds = clientRows.map(r => r.clientid);
-            const [rows] = await db.query(`
-              SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-                     csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
-                     csr.Totalrequiredstaffnumber,
-                     COUNT(css.id) AS total_slots,
-                     SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
-                     SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
-                     SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
-              FROM Clientshiftrequests csr
-              LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-              LEFT JOIN Clients c ON cl.clientid = c.id
-              LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
-              LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
-              WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})
-              GROUP BY csr.id
-              ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-            `, clientIds);
-            return res.status(200).json({ availableShifts: rows });
-          } else {
-            return res.status(403).json({ message: 'Access denied' });
-          }
-        } catch (err) {
-          console.error('Get available client shifts error:', err);
-          res.status(500).json({ message: 'Error fetching available shifts', error: err });
-        }
-      };
+      const [rows] = await db.query(`
+        SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
+               csr.Totalrequiredstaffnumber,
+               COUNT(css.id) AS total_slots,
+               SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
+               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
+               SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
+        LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
+        WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})
+        GROUP BY csr.id
+        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+      `, clientIds);
+      return res.status(200).json({ availableShifts: rows });
+    } else if (userType === 'Employee - Standard User') {
+      // Employee: See only open shift slots
+      const [rows] = await db.query(`
+        SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
+               cl.LocationName, cl.LocationAddress, c.Name AS clientname
+        FROM Clientstaffshifts css
+        LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
+        WHERE css.Status = 'open'
+        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+      `);
+      return res.status(200).json({ availableShifts: rows });
+    } else {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+  } catch (err) {
+    console.error('Get available client shifts error:', err);
+    res.status(500).json({ message: 'Error fetching available shifts', error: err });
+  }
+};
 
 

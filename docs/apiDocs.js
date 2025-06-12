@@ -230,12 +230,12 @@ const apiDocs = [
   {
     method: 'GET',
     path: '/api/available-client-shifts',
-    description: 'View available client shifts. Behavior and data returned depends on user type.',
+    description: 'Get a list of available client shifts. The data you get depends on who you are (your user type).',
     userType: ['Employee - Standard User', 'Client - Standard User', 'Staff - Standard User', 'System Admin'],
     headers: ['Authorization: Bearer <JWT token> (required)'],
     response: {
       200: {
-        description: 'List of available shifts or shift slots, depending on user type',
+        description: 'A list of available shifts or shift slots, depending on user type',
         body: {
           availableShifts: [
             '// For Staff/Admin: All shifts for all hospitals/locations, grouped with staff requirements and slot status',
@@ -247,12 +247,33 @@ const apiDocs = [
       403: 'Access denied'
     },
     NOTE: `
-      - The data returned depends on the user type:
-        * System Admin / Staff - Standard User: Sees all shifts for all hospitals/locations, including total staff required, number of slots filled, and which hospital/location each shift is for.
-        * Client - Standard User: Sees all shifts for their own hospital(s)/locations, including staff requirements and slot status.
-        * Employee - Standard User: Sees only open shift slots they can accept (not grouped, just available slots).
-      - Each shift includes: shift date, start/end time, location, client name, qualification, total staff required, number of open slots, number of filled slots, and status.
-      - This endpoint is useful for displaying shift availability dashboards for each user type.
+      How this API works (explained simply):
+      - This API shows you shifts, but what you see depends on your role (user type):
+        * If you are Staff or Admin: You see ALL shifts for ALL hospitals/locations. You also see how many staff are needed, how many have accepted, and how many spots are still open.
+        * If you are a Client: You see ONLY the shifts that belong to your own hospital(s) or locations. You do NOT see shifts for other clients.
+        * If you are an Employee: You see ONLY the open shift slots that you can accept (not grouped by shift, just a list of available slots).
+      - You MUST send your JWT token in the Authorization header. This is how the API knows who you are and what you are allowed to see.
+      - The response will always be a JSON object with an array called 'availableShifts'.
+
+      What the front-end needs to do:
+      1. Log in the user and get the JWT token from the /api/login endpoint.
+      2. When calling this API, always include the JWT token in the Authorization header like this:
+         Authorization: Bearer <JWT token>
+      3. Make a GET request to /api/available-client-shifts.
+      4. Read the 'availableShifts' array in the response and display it to the user.
+      5. The shape of each item in 'availableShifts' will depend on the user type (see above).
+
+      Things to keep in mind:
+      - If you do not send a valid JWT token, you will get a 403 error (access denied).
+      - If you are a Client, you will only see your own shifts. If you are Staff/Admin, you see everything. If you are an Employee, you only see open slots.
+      - The API does all the filtering for you. The front-end does NOT need to filter the data based on user type.
+      - Always check the user type from the JWT token (decode it on the front-end if you want to show/hide UI elements).
+      - If the 'availableShifts' array is empty, it means there are no shifts for you to see.
+      - This endpoint is safe to call for all logged-in users, but what you see depends on your role.
+
+      Example cURL:
+        curl -X GET https://your-api-domain/api/available-client-shifts \
+          -H "Authorization: Bearer <JWT token>"
     `
   },
   {
