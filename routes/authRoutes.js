@@ -2,6 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const { createShiftValidation } = require('../middleware/validation');
+const { linkClientUserValidation } = require('../middleware/validationLinkClientUser');
+const { validationResult } = require('express-validator');
 console.log('authController object in authRoutes immediately after require:', authController);
 console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
 
@@ -39,9 +42,21 @@ function authorizeEmployeeOrStaffOrAdmin(req, res, next) {
 router.post('/login', authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/register', authenticate, authController.register);
-router.post('/clientshiftrequests', authenticate, authorizeClient, authController.createClientShiftRequest);
+router.post('/clientshiftrequests', authenticate, authorizeClient, createShiftValidation, (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ message: 'Validation error', errors: errors.array() });
+  }
+  return authController.createClientShiftRequest(req, res, next);
+});
 // Route to link a client user to a location
-router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, authController.linkClientUserToLocation);
+router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, linkClientUserValidation, (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ message: 'Validation error', errors: errors.array() });
+  }
+  return authController.linkClientUserToLocation(req, res, next);
+});
 
 // Client: View only their assigned locations
 router.get('/my-client-locations', authenticate, authController.getMyClientLocations);

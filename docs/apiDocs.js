@@ -130,15 +130,37 @@ const apiDocs = [
     bodyParams: ['emailaddress', 'clientlocationid'],
     headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
     NOTE: `
-      - Requires Authorization header with a valid JWT token. The JWT token must belong to a user whose usertype is either 'Staff - Standard User' or 'System Admin'.
-      - The emailaddress must belong to a user whose usertype is 'Client - Standard User'.
-      - The clientlocationid must exist and be linked to a client (Clientlocations table).
-      - If the user is already linked to the client for this location, the API will return a message indicating so.
-      - The clientlocationid is the Clientlocations table ID, not the clientID.
-      - Once linked, the result can be viewed in the Userclients table (the value is clientID).
-      - If the user is not found, or is not a Client - Standard User, or the location is invalid, a clear error is returned.
-      - This endpoint is intended for frontend use when assigning client users to specific client locations.
-    `,
+──────────────────────────────────────────────────────────────
+**How this API works:**
+──────────────────────────────────────────────────────────────
+- Only Staff - Standard User or System Admin can use this endpoint.
+- The emailaddress must belong to a user whose usertype is 'Client - Standard User'.
+- The clientlocationid must exist and be linked to a client (Clientlocations table).
+- If the user is already linked to the client for this location, the API will return a message indicating so.
+- The clientlocationid is the Clientlocations table ID, not the clientID.
+- Once linked, the result can be viewed in the Userclients table (the value is clientID).
+- If the user is not found, or is not a Client - Standard User, or the location is invalid, a clear error is returned.
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in as Staff - Standard User or System Admin and get the JWT token.
+2. Make a POST request to /api/link-client-user-location with the following JSON body:
+   {
+     "emailaddress": "clientuser@example.com",
+     "clientlocationid": 9
+   }
+3. Include the JWT token in the Authorization header.
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X POST https://your-api-domain/api/link-client-user-location \
+  -H "Authorization: Bearer <JWT token>" \
+  -H "Content-Type: application/json" \
+  -d '{"emailaddress": "clientuser@example.com", "clientlocationid": 9}'
+──────────────────────────────────────────────────────────────
+`,
     example: {
       request: {
         headers: {
@@ -179,6 +201,29 @@ const apiDocs = [
     description: 'Client: View only the locations assigned to the logged-in client user. Returns all Clientlocations for the client(s) this user is linked to via Userclients.',
     userType: ['Client - Standard User', 'System Admin'],
     headers: ['Authorization: Bearer <JWT token> (Client - Standard User or System Admin)'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works:**
+──────────────────────────────────────────────────────────────
+- Returns only the locations (from Clientlocations) for the client(s) the logged-in user is linked to in Userclients.
+- If the user is not linked to any client, an empty array is returned.
+- The response fields match the Clientlocations table.
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in as a Client - Standard User or System Admin and get the JWT token.
+2. Make a GET request to /api/my-client-locations.
+3. Include the JWT token in the Authorization header.
+4. The response will be a list of assigned client locations.
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/my-client-locations \
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
     exampleRequest: {
       headers: {
         'Authorization': 'Bearer <JWT token>'
@@ -216,7 +261,41 @@ const apiDocs = [
       'totalrequiredstaffnumber',
       'additionalvalue'
     ],
-    NOTE: 'Requires Authorization header with a valid JWT token belonging to either Client - Standard User, Staff - Standard User (admin staff), or System Admin. Client users must be linked to the client for the location in the Userclients table. Admin staff and System Admin can raise shifts for any location. The clientlocationid must exist and be linked to a client. The qualificationid must exist in Lookups and be of type Qualification. The API will create N staff shift slots in Clientstaffshifts, where N = totalrequiredstaffnumber. Each staff shift slot will have Status = "open" until accepted.',
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works:**
+──────────────────────────────────────────────────────────────
+- Client users can only raise shifts for their assigned locations (must be linked in Userclients).
+- Staff - Standard User and System Admin can raise shifts for any location.
+- The clientlocationid must exist and be linked to a client.
+- The qualificationid must exist in Lookups and be of type Qualification.
+- The API will create N staff shift slots in Clientstaffshifts, where N = totalrequiredstaffnumber. Each staff shift slot will have Status = "open" until accepted.
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in as a Client - Standard User, Staff - Standard User, or System Admin and get the JWT token.
+2. Make a POST request to /api/clientshiftrequests with the required fields in the JSON body.
+3. Include the JWT token in the Authorization header.
+4. The response will include the created shift request and staff shifts.
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X POST https://your-api-domain/api/clientshiftrequests \
+  -H "Authorization: Bearer <JWT token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientlocationid": 9,
+    "shiftdate": "2025-06-05",
+    "starttime": "08:00",
+    "endtime": "16:00",
+    "qualificationid": 12,
+    "totalrequiredstaffnumber": 3,
+    "additionalvalue": "Day shift, urgent"
+  }'
+──────────────────────────────────────────────────────────────
+`,
     example: {
       "clientlocationid": 9,
       "shiftdate": "2025-06-05",
@@ -233,6 +312,7 @@ const apiDocs = [
     description: 'Get a list of available client shifts. The data you get depends on who you are (your user type).',
     userType: ['Employee - Standard User', 'Client - Standard User', 'Staff - Standard User', 'System Admin'],
     headers: ['Authorization: Bearer <JWT token> (required)'],
+    queryParams: ['limit', 'page'],
     response: {
       200: {
         description: 'A list of available shifts or shift slots, depending on user type',
@@ -241,40 +321,57 @@ const apiDocs = [
             '// For Staff/Admin: All shifts for all hospitals/locations, grouped with staff requirements and slot status',
             '// For Client: All shifts for their own hospital(s)/locations, grouped with staff requirements and slot status',
             '// For Employee: Only open shift slots available to accept'
-          ]
+          ],
+          pagination: {
+            page: 1,
+            limit: 10,
+            total: 123
+          }
         }
       },
       403: 'Access denied'
     },
     NOTE: `
-      How this API works (explained simply):
-      - This API shows you shifts, but what you see depends on your role (user type):
-        * If you are Staff or Admin: You see ALL shifts for ALL hospitals/locations. You also see how many staff are needed, how many have accepted, and how many spots are still open.
-        * If you are a Client: You see ONLY the shifts that belong to your own hospital(s) or locations. You do NOT see shifts for other clients.
-        * If you are an Employee: You see ONLY the open shift slots that you can accept (not grouped by shift, just a list of available slots).
-      - You MUST send your JWT token in the Authorization header. This is how the API knows who you are and what you are allowed to see.
-      - The response will always be a JSON object with an array called 'availableShifts'.
+──────────────────────────────────────────────────────────────
+**How this API works (explained simply):**
+──────────────────────────────────────────────────────────────
+- This API shows you shifts, but what you see depends on your role (user type):
+  * If you are Staff or Admin: You see ALL shifts for ALL hospitals/locations. You also see how many staff are needed, how many have accepted, and how many spots are still open.
+  * If you are a Client: You see ONLY the shifts that belong to your own hospital(s) or locations. You do NOT see shifts for other clients.
+  * If you are an Employee: You see ONLY the open shift slots that you can accept (not grouped by shift, just a list of available slots).
 
-      What the front-end needs to do:
-      1. Log in the user and get the JWT token from the /api/login endpoint.
-      2. When calling this API, always include the JWT token in the Authorization header like this:
-         Authorization: Bearer <JWT token>
-      3. Make a GET request to /api/available-client-shifts.
-      4. Read the 'availableShifts' array in the response and display it to the user.
-      5. The shape of each item in 'availableShifts' will depend on the user type (see above).
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in the user and get the JWT token from the /api/login endpoint.
+2. When calling this API, always include the JWT token in the Authorization header like this:
+   Authorization: Bearer <JWT token>
+3. You can use pagination with the following query parameters:
+   - limit (default 10, max 50)
+   - page (default 1)
+   Example: /api/available-client-shifts?limit=5&page=2
+4. Make a GET request to /api/available-client-shifts.
+5. Read the 'availableShifts' array in the response and display it to the user.
+6. The response also includes a 'pagination' object: { page, limit, total }
 
-      Things to keep in mind:
-      - If you do not send a valid JWT token, you will get a 403 error (access denied).
-      - If you are a Client, you will only see your own shifts. If you are Staff/Admin, you see everything. If you are an Employee, you only see open slots.
-      - The API does all the filtering for you. The front-end does NOT need to filter the data based on user type.
-      - Always check the user type from the JWT token (decode it on the front-end if you want to show/hide UI elements).
-      - If the 'availableShifts' array is empty, it means there are no shifts for you to see.
-      - This endpoint is safe to call for all logged-in users, but what you see depends on your role.
+──────────────────────────────────────────────────────────────
+**Things to keep in mind:**
+──────────────────────────────────────────────────────────────
+- If you do not send a valid JWT token, you will get a 403 error (access denied).
+- If you are a Client, you will only see your own shifts. If you are Staff/Admin, you see everything. If you are an Employee, you only see open slots.
+- The API does all the filtering for you. The front-end does NOT need to filter the data based on user type.
+- Always check the user type from the JWT token (decode it on the front-end if you want to show/hide UI elements).
+- If the 'availableShifts' array is empty, it means there are no shifts for you to see.
+- This endpoint is safe to call for all logged-in users, but what you see depends on your role.
 
-      Example cURL:
-        curl -X GET https://your-api-domain/api/available-client-shifts \
-          -H "Authorization: Bearer <JWT token>"
-    `
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/available-client-shifts \
+  -H "Authorization: Bearer <JWT token>" \
+  -G -d "limit=5" -d "page=2"
+──────────────────────────────────────────────────────────────
+`
   },
   {
     method: 'POST',

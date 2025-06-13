@@ -326,7 +326,7 @@ exports.createClientShiftRequest = async (req, res) => {
       [clientlocationid]
     );
     if (!locationRows.length) {
-      return res.status(400).json({ message: 'Invalid client location' });
+      return res.status(400).json({ message: 'Invalid client location.' });
     }
     const clientid = locationRows[0].clientid;
 
@@ -337,7 +337,7 @@ exports.createClientShiftRequest = async (req, res) => {
         [createdbyid, clientid]
       );
       if (!userClientRows.length) {
-        return res.status(403).json({ message: 'Client user not authorized for this client/location' });
+        return res.status(403).json({ message: 'Access denied: You are not authorized for this client/location.' });
       }
     }
     // Staff - Standard User and System Admin can raise for any location (no restriction)
@@ -348,7 +348,7 @@ exports.createClientShiftRequest = async (req, res) => {
       [qualificationid]
     );
     if (!qualRows.length) {
-      return res.status(400).json({ message: 'Invalid qualification' });
+      return res.status(400).json({ message: 'Invalid qualification.' });
     }
 
     // Insert into Clientshiftrequests
@@ -385,13 +385,13 @@ exports.createClientShiftRequest = async (req, res) => {
     const [createdShift] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [clientshiftrequestid]);
     const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
     res.status(201).json({
-      message: 'Shift request created',
+      message: 'Shift request created successfully.',
       shift: createdShift[0],
       staffShifts: createdStaffShifts
     });
   } catch (err) {
     console.error('Create shift request error:', err);
-    res.status(500).json({ message: 'Create shift request error', error: err });
+    res.status(500).json({ message: 'Failed to create shift request.', error: err.message });
   }
 };
 
@@ -448,7 +448,7 @@ exports.linkClientUserToLocation = async (req, res) => {
     res.status(201).json({ message: 'User linked to client for this location.' });
   } catch (err) {
     console.error('Link client user to location error:', err);
-    res.status(500).json({ message: 'Link client user to location error', error: err });
+    res.status(500).json({ message: 'Failed to link client user to location.', error: err.message });
   }
 };
 
@@ -602,10 +602,21 @@ const formatDateTime = (isoString) => {
 exports.getAvailableClientShifts = async (req, res) => {
   const userType = req.user?.usertype;
   const userId = req.user?.id;
+  // Pagination params
+  let limit = parseInt(req.query.limit) || 10;
+  let page = parseInt(req.query.page) || 1;
+  if (limit > 50) limit = 50;
+  if (limit < 1) limit = 10;
+  if (page < 1) page = 1;
+  const offset = (page - 1) * limit;
   try {
+    let rows, total;
     if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      // Get total count
+      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr`);
+      total = countResult[0]?.total || 0;
       // Admin/Staff: See all shifts for all hospitals/locations
-      const [rows] = await db.query(`
+      [rows] = await db.query(`
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
                csr.Totalrequiredstaffnumber,
@@ -620,7 +631,8 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
         GROUP BY csr.id
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-      `);
+        LIMIT ? OFFSET ?
+      `, [limit, offset]);
       // Format dates for output
       const formatted = rows.map(row => ({
         ...row,
@@ -628,13 +640,16 @@ exports.getAvailableClientShifts = async (req, res) => {
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime)
       }));
-      return res.status(200).json({ availableShifts: formatted });
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Client - Standard User') {
       // Client: See all shifts for their own hospital(s)
       const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-      if (!clientRows.length) return res.status(200).json({ availableShifts: [] });
+      if (!clientRows.length) return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
       const clientIds = clientRows.map(r => r.clientid);
-      const [rows] = await db.query(`
+      // Get total count
+      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})`, clientIds);
+      total = countResult[0]?.total || 0;
+      [rows] = await db.query(`
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
                csr.Totalrequiredstaffnumber,
@@ -650,17 +665,21 @@ exports.getAvailableClientShifts = async (req, res) => {
         WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})
         GROUP BY csr.id
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-      `, clientIds);
+        LIMIT ? OFFSET ?
+      `, [...clientIds, limit, offset]);
       const formatted = rows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime)
       }));
-      return res.status(200).json({ availableShifts: formatted });
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
+      // Get total count
+      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM Clientstaffshifts WHERE Status = 'open'`);
+      total = countResult[0]?.total || 0;
       // Employee: See only open shift slots
-      const [rows] = await db.query(`
+      [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
                cl.LocationName, cl.LocationAddress, c.Name AS clientname
@@ -671,14 +690,15 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
         WHERE css.Status = 'open'
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-      `);
+        LIMIT ? OFFSET ?
+      `, [limit, offset]);
       const formatted = rows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime)
       }));
-      return res.status(200).json({ availableShifts: formatted });
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else {
       return res.status(403).json({ message: 'Access denied' });
     }

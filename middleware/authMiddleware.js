@@ -9,19 +9,24 @@ const authenticate = async (req, res, next) => {
   if (!token) return res.status(401).json({ message: 'Malformed token' });
 
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
+    if (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Session expired. Please log in again.', code: 'TOKEN_EXPIRED' });
+      }
+      return res.status(401).json({ message: 'Invalid token. Please log in again.', code: 'TOKEN_INVALID' });
+    }
     // Check if password was changed after token was issued
     try {
       const [rows] = await db.query('SELECT updatedat FROM Users WHERE id = ?', [decoded.id]);
-      if (!rows.length) return res.status(401).json({ message: 'User not found' });
+      if (!rows.length) return res.status(401).json({ message: 'User not found. Please log in again.', code: 'USER_NOT_FOUND' });
       const userUpdatedAt = new Date(rows[0].updatedat).getTime() / 1000; // seconds
       if (decoded.iat && userUpdatedAt > decoded.iat) {
-        return res.status(401).json({ message: 'Token invalid due to password change. Please log in again.' });
+        return res.status(401).json({ message: 'Session invalid due to password change. Please log in again.', code: 'TOKEN_PASSWORD_CHANGED' });
       }
       req.user = decoded; // Adds the decoded user data to the request
       next();
     } catch (dbErr) {
-      return res.status(500).json({ message: 'Auth DB error', error: dbErr });
+      return res.status(500).json({ message: 'Authentication error. Please try again later.', code: 'AUTH_DB_ERROR' });
     }
   });
 };
