@@ -585,6 +585,19 @@ exports.softDeletePerson = async (req, res) => {
   }
 };
 
+const formatDate = (isoString) => {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d)) return isoString;
+  return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: '2-digit' });
+};
+const formatDateTime = (isoString) => {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d)) return isoString;
+  return d.toLocaleString('en-AU', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
 // Staff: View available client shifts
 exports.getAvailableClientShifts = async (req, res) => {
   const userType = req.user?.usertype;
@@ -608,7 +621,14 @@ exports.getAvailableClientShifts = async (req, res) => {
         GROUP BY csr.id
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
       `);
-      return res.status(200).json({ availableShifts: rows });
+      // Format dates for output
+      const formatted = rows.map(row => ({
+        ...row,
+        Shiftdate: formatDate(row.Shiftdate),
+        Starttime: formatDateTime(row.Starttime),
+        Endtime: formatDateTime(row.Endtime)
+      }));
+      return res.status(200).json({ availableShifts: formatted });
     } else if (userType === 'Client - Standard User') {
       // Client: See all shifts for their own hospital(s)
       const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
@@ -631,7 +651,13 @@ exports.getAvailableClientShifts = async (req, res) => {
         GROUP BY csr.id
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
       `, clientIds);
-      return res.status(200).json({ availableShifts: rows });
+      const formatted = rows.map(row => ({
+        ...row,
+        Shiftdate: formatDate(row.Shiftdate),
+        Starttime: formatDateTime(row.Starttime),
+        Endtime: formatDateTime(row.Endtime)
+      }));
+      return res.status(200).json({ availableShifts: formatted });
     } else if (userType === 'Employee - Standard User') {
       // Employee: See only open shift slots
       const [rows] = await db.query(`
@@ -646,7 +672,13 @@ exports.getAvailableClientShifts = async (req, res) => {
         WHERE css.Status = 'open'
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
       `);
-      return res.status(200).json({ availableShifts: rows });
+      const formatted = rows.map(row => ({
+        ...row,
+        Shiftdate: formatDate(row.Shiftdate),
+        Starttime: formatDateTime(row.Starttime),
+        Endtime: formatDateTime(row.Endtime)
+      }));
+      return res.status(200).json({ availableShifts: formatted });
     } else {
       return res.status(403).json({ message: 'Access denied' });
     }
