@@ -376,83 +376,148 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
   {
     method: 'POST',
     path: '/api/clientstaffshifts/:id/accept',
-    description: 'Employee/Staff/Admin: Accept a client staff shift. Sets status to pending approval and assigns the shift to the user.',
-    userType: ['Employee', 'Staff', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Employee - Standard User, Staff - Standard User, or System Admin)'],
+    description: 'Accept an open client staff shift. Sets status to "pending approval" and records who accepted it and when.',
+    userType: ['Employee - Standard User', 'Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Employee, Staff, or Admin)'],
     request: {
       params: {
-        id: 'Shift ID'
+        id: 'The ID of the Clientstaffshifts record to accept (must be in "open" status).'
       }
     },
     response: {
       200: {
-        description: 'Shift accepted and pending admin approval',
+        description: 'Shift successfully accepted and is now pending approval.',
         body: {
           message: 'Shift accepted and pending admin approval'
         }
       },
-      400: 'Error message',
-      403: 'Access denied',
-      404: 'Shift not found'
+      400: { message: 'Shift slot is not open for acceptance (e.g., already accepted, approved, or not in "open" status).' },
+      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
+      403: { message: 'Access denied: Only employees, staff, or admin can accept shifts.' },
+      404: { message: 'Shift slot not found.' },
+      500: { message: 'Failed to accept shift (server error).' }
     },
     example: {
-      "message": "Shift accepted and pending admin approval"
+      request: 'POST /api/clientstaffshifts/24/accept',
+      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_EMPLOYEE_STAFF_OR_ADMIN>' },
+      response: {
+        message: "Shift accepted and pending admin approval"
+      }
     },
-    NOTE: 'This endpoint is used by employees, staff, or admin to accept a shift. The shift status will be set to pending approval and will not be visible to other employees until it is rejected.'
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**Frontend Developer Notes:**
+──────────────────────────────────────────────────────────────
+- **Who can use:** 'Employee - Standard User', 'Staff - Standard User', 'System Admin'.
+- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "open".
+- **Action:**
+  - Updates \`Clientstaffshifts.Status\` to "pending approval".
+  - Sets \`Clientstaffshifts.Acceptedbyid\` to the ID of the user making the request.
+  - Sets \`Clientstaffshifts.Acceptedat\` to the current timestamp.
+- **Outcome:** The shift is no longer "open" and won't appear in the general list of available shifts for other employees. It now awaits action (approve/reject) by a Staff/Admin user.
+- **Error Handling:**
+  - \`400 Bad Request\`: If the shift is not "open".
+  - \`403 Forbidden\`: If the logged-in user is not an Employee, Staff, or Admin.
+  - \`404 Not Found\`: If the shift ID is invalid.
+──────────────────────────────────────────────────────────────
+`
   },
   {
     method: 'POST',
     path: '/api/clientstaffshifts/:id/approve',
-    description: 'Staff/Admin: Approve a client staff shift. Sets status to approved and marks the shift as admin approved.',
-    userType: ['Staff', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    description: 'Approve a "pending approval" client staff shift. Sets status to "approved" and records who approved it and when.',
+    userType: ['Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Staff or Admin only)'],
     request: {
       params: {
-        id: 'Shift ID'
+        id: 'The ID of the Clientstaffshifts record to approve (must be in "pending approval" status).'
       }
     },
     response: {
       200: {
-        description: 'Shift approved',
+        description: 'Shift successfully approved.',
         body: {
           message: 'Shift approved'
         }
       },
-      400: 'Error message',
-      403: 'Access denied',
-      404: 'Shift not found'
+      400: { message: 'Shift slot is not pending approval (e.g., already approved, open, or not in "pending approval" status).' },
+      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
+      403: { message: 'Access denied: Only staff or admin can approve shifts.' },
+      404: { message: 'Shift slot not found.' },
+      500: { message: 'Failed to approve shift (server error).' }
     },
     example: {
-      "message": "Shift approved"
+      request: 'POST /api/clientstaffshifts/24/approve',
+      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_STAFF_OR_ADMIN>' },
+      response: {
+        message: "Shift approved"
+      }
     },
-    NOTE: 'This endpoint is used by staff or admin to approve a shift that was accepted by an employee. The shift status will be set to approved and will not be visible to employees.'
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**Frontend Developer Notes:**
+──────────────────────────────────────────────────────────────
+- **Who can use:** 'Staff - Standard User', 'System Admin'.
+- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "pending approval".
+- **Action:**
+  - Updates \`Clientstaffshifts.Status\` to "approved".
+  - Sets \`Clientstaffshifts.Approvedat\` to the current timestamp.
+  - Sets \`Clientstaffshifts.Approvedbyid\` to the ID of the admin/staff user making the request.
+- **Outcome:** The shift is now confirmed.
+- **Error Handling:**
+  - \`400 Bad Request\`: If the shift is not "pending approval".
+  - \`403 Forbidden\`: If the logged-in user is not Staff or Admin.
+  - \`404 Not Found\`: If the shift ID is invalid.
+──────────────────────────────────────────────────────────────
+`
   },
   {
     method: 'POST',
     path: '/api/clientstaffshifts/:id/reject',
-    description: 'Staff/Admin: Reject a client staff shift. Sets status back to open and clears assignment so it is visible to employees again.',
-    userType: ['Staff', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    description: 'Reject a "pending approval" client staff shift. Sets status back to "open" and clears acceptance details.',
+    userType: ['Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Staff or Admin only)'],
     request: {
       params: {
-        id: 'Shift ID'
+        id: 'The ID of the Clientstaffshifts record to reject (must be in "pending approval" status).'
       }
     },
     response: {
       200: {
-        description: 'Shift rejected and reopened',
+        description: 'Shift successfully rejected and reopened.',
         body: {
           message: 'Shift rejected and reopened'
         }
       },
-      400: 'Error message',
-      403: 'Access denied',
-      404: 'Shift not found'
+      400: { message: 'Shift slot is not pending approval (e.g., already approved, open, or not in "pending approval" status).' },
+      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
+      403: { message: 'Access denied: Only staff or admin can reject shifts.' },
+      404: { message: 'Shift slot not found.' },
+      500: { message: 'Failed to reject shift (server error).' }
     },
     example: {
-      "message": "Shift rejected and reopened"
+      request: 'POST /api/clientstaffshifts/24/reject',
+      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_STAFF_OR_ADMIN>' },
+      response: {
+        message: "Shift rejected and reopened"
+      }
     },
-    NOTE: 'This endpoint is used by staff or admin to reject a shift that was accepted by an employee. The shift will be reset to open and can be accepted by another employee.'
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**Frontend Developer Notes:**
+──────────────────────────────────────────────────────────────
+- **Who can use:** 'Staff - Standard User', 'System Admin'.
+- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "pending approval".
+- **Action:**
+  - Updates \`Clientstaffshifts.Status\` back to "open".
+  - Clears (sets to NULL) \`Clientstaffshifts.Acceptedbyid\`, \`Clientstaffshifts.Acceptedat\`, \`Clientstaffshifts.Approvedat\`, and \`Clientstaffshifts.Approvedbyid\`.
+- **Outcome:** The shift becomes available again for any eligible employee to accept.
+- **Error Handling:**
+  - \`400 Bad Request\`: If the shift is not "pending approval".
+  - \`403 Forbidden\`: If the logged-in user is not Staff or Admin.
+  - \`404 Not Found\`: If the shift ID is invalid.
+──────────────────────────────────────────────────────────────
+`
   },
   {
     method: 'DELETE',
