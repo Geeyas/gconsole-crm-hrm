@@ -131,7 +131,7 @@ const apiDocs = [
     headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
     NOTE: `
 ──────────────────────────────────────────────────────────────
-**How this API works:**
+**How this API works (Client-centric model):**
 ──────────────────────────────────────────────────────────────
 - Only Staff - Standard User or System Admin can use this endpoint.
 - The emailaddress must belong to a user whose usertype is 'Client - Standard User'.
@@ -140,6 +140,7 @@ const apiDocs = [
 - The clientlocationid is the Clientlocations table ID, not the clientID.
 - Once linked, the result can be viewed in the Userclients table (the value is clientID).
 - If the user is not found, or is not a Client - Standard User, or the location is invalid, a clear error is returned.
+- **NEW:** Users are now linked to the Client (not just a single location). The response includes the client and an array of all their locations.
 
 ──────────────────────────────────────────────────────────────
 **How to use this API:**
@@ -174,17 +175,32 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
       },
       responses: {
         201: { 
-          message: 'User linked to client for this location.',
+          message: 'User linked to client. User now has access to all locations for this client.',
           client: { id: 3, name: 'Acme Hospital' },
-          location: {
-            id: 9,
-            clientid: 3,
-            locationname: 'Main Campus',
-            locationaddress: '123 Main St',
-            // ...other fields from Clientlocations...
-          }
+          locations: [
+            {
+              id: 9,
+              clientid: 3,
+              locationname: 'Main Campus',
+              locationaddress: '123 Main St',
+              // ...other fields from Clientlocations...
+            },
+            {
+              id: 10,
+              clientid: 3,
+              locationname: 'West Wing',
+              locationaddress: '456 West St',
+              // ...other fields from Clientlocations...
+            }
+            // ...all locations for this client...
+          ]
         },
-        200: { message: 'User is already linked to this client.' },
+        200: { message: 'User is already linked to this client.',
+          client: { id: 3, name: 'Acme Hospital' },
+          locations: [
+            // ...all locations for this client...
+          ]
+        },
         400: { message: 'Target user is not a Client - Standard User.' },
         403: { message: 'Access denied: Only staff or admin can link users to locations.' },
         404: { message: 'User not found with the provided email address.' },
@@ -195,30 +211,31 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
         - Only users with usertype 'Client - Standard User' can be linked.
         - The clientlocationid must be the ID from the Clientlocations table.
         - The JWT token in the Authorization header must belong to a user with usertype 'Staff - Standard User' or 'System Admin'.
-        - If the user is already linked, you will receive a 200 response with a message.
+        - If the user is already linked, you will receive a 200 response with a message and all locations for the client.
         - If the user is not found, not a client user, or the location is invalid, you will receive a clear error message.
-        - On success, the response includes the client name and the full location info.
+        - On success, the response includes the client name and an array of all their locations.
         - Example cURL:
           curl -X POST https://your-api-domain/api/link-client-user-location \
             -H "Authorization: Bearer <JWT token for Staff - Standard User or System Admin>" \
             -H "Content-Type: application/json" \
             -d '{"emailaddress": "clientuser@example.com", "clientlocationid": 9}'
+        - **NEW:** The user is now linked to the client, not just a single location. The response always includes all locations for the client.
       `
     }
   },
   {
     method: 'GET',
     path: '/api/my-client-locations',
-    description: 'Client: View only the locations assigned to the logged-in client user. Returns all Clientlocations for the client(s) this user is linked to via Userclients.',
+    description: 'Client: View only the locations assigned to the logged-in client user. Returns all Clientlocations for the client(s) this user is linked to via Userclients, grouped by client.',
     userType: ['Client - Standard User', 'System Admin'],
     headers: ['Authorization: Bearer <JWT token> (Client - Standard User or System Admin)'],
     NOTE: `
 ──────────────────────────────────────────────────────────────
-**How this API works:**
+**How this API works (Client-centric model):**
 ──────────────────────────────────────────────────────────────
-- Returns only the locations (from Clientlocations) for the client(s) the logged-in user is linked to in Userclients.
+- Returns all clients the user is linked to (via Userclients), each with an array of their locations (from Clientlocations).
 - If the user is not linked to any client, an empty array is returned.
-- The response fields match the Clientlocations table.
+- The response is grouped by client, with each client object containing an array of their locations.
 
 ──────────────────────────────────────────────────────────────
 **How to use this API:**
@@ -226,7 +243,7 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
 1. Log in as a Client - Standard User or System Admin and get the JWT token.
 2. Make a GET request to /api/my-client-locations.
 3. Include the JWT token in the Authorization header.
-4. The response will be a list of assigned client locations.
+4. The response will be a list of assigned clients, each with their locations.
 
 ──────────────────────────────────────────────────────────────
 **Example cURL:**
@@ -242,22 +259,37 @@ curl -X GET https://your-api-domain/api/my-client-locations \
     },
     exampleResponse: {
       200: {
-        description: 'List of assigned client locations',
+        description: 'List of assigned clients, each with their locations',
         body: {
-          locations: [
+          clients: [
             {
-              id: 9,
-              clientid: 3,
-              locationaddress: '123 Main St',
-              // ...other fields from Clientlocations...
+              id: 3,
+              name: 'Acme Hospital',
+              locations: [
+                {
+                  id: 9,
+                  clientid: 3,
+                  locationname: 'Main Campus',
+                  locationaddress: '123 Main St',
+                  // ...other fields from Clientlocations...
+                },
+                {
+                  id: 10,
+                  clientid: 3,
+                  locationname: 'West Wing',
+                  locationaddress: '456 West St',
+                  // ...other fields from Clientlocations...
+                }
+                // ...more locations for this client...
+              ]
             },
-            // ...more locations if user is linked to multiple clients...
+            // ...more clients if user is linked to multiple clients...
           ]
         }
       },
       403: 'Access denied'
     },
-    NOTE: 'This endpoint returns only the locations (from Clientlocations) for the client(s) the logged-in user is linked to in Userclients. If the user is not linked to any client, an empty array is returned. The response fields match the Clientlocations table.'
+    NOTE: 'This endpoint returns all clients the user is linked to, each with an array of their locations. If the user is not linked to any client, an empty array is returned. The response is grouped by client.'
   },
   {
     method: 'POST',
@@ -558,18 +590,7 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
     description: 'Soft-deletes a person in the People table by setting deletedat and deletedbyid. Requires authentication. :id is the People table ID.',
     urlParams: ['id'],
     headers: ['Authorization: Bearer <JWT token>'],
-    NOTE: 'This endpoint does not hard-delete the record. It sets deletedat to the current date/time and deletedbyid to the user ID from the JWT. Returns 404 if the person is not found.',
-    example: {
-      request: {
-        headers: {
-          'Authorization': 'Bearer <JWT token>'
-        }
-      },
-      response: {
-        200: { message: 'Person soft-deleted' },
-        404: { message: 'Person not found' }
-      }
-    }
+    NOTE: 'This endpoint does not hard-delete the record. It sets deletedat to the current date/time and deletedbyid to the user ID from the JWT. Returns 404 if the person is not found.'
   },
   {
     method: 'GET',

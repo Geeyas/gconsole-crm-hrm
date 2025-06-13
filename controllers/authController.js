@@ -162,7 +162,7 @@ exports.register = async (req, res) => {
 
   } catch (err) {
     logger.error('Register error', { error: err });
-    res.status(500).json({ message: 'Registration failed', error: err });
+    res.status
   }
 };
 
@@ -451,21 +451,20 @@ exports.linkClientUserToLocation = async (req, res) => {
       [userid, clientid]
     );
     if (existing.length) {
-      return res.status(200).json({ message: 'User is already linked to this client.' });
+      // Fetch all locations for this client
+      const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ?', [clientid]);
+      return res.status(200).json({ message: 'User is already linked to this client.', client: { id: clientid, name: clientName }, locations });
     }
     await db.query(
       'INSERT INTO Userclients (userid, clientid) VALUES (?, ?)',
       [userid, clientid]
     );
-    // Fetch client name and location info
-    const [clientRows] = await db.query('SELECT Name FROM Clients WHERE id = ?', [clientid]);
-    const clientName = clientRows[0]?.Name || null;
-    const [locationInfoRows] = await db.query('SELECT * FROM Clientlocations WHERE id = ?', [clientlocationid]);
-    const locationInfo = locationInfoRows[0] || null;
+    // Fetch all locations for this client
+    const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ?', [clientid]);
     res.status(201).json({
-      message: 'User linked to client for this location.',
+      message: 'User linked to client for this client.',
       client: { id: clientid, name: clientName },
-      location: locationInfo
+      locations
     });
   } catch (err) {
     logger.error('Link client user to location error', { error: err });
