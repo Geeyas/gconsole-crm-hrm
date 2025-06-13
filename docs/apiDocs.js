@@ -126,8 +126,8 @@ const apiDocs = [
   {
     method: 'POST',
     path: '/api/link-client-user-location',
-    description: 'Links a Client - Standard User to the client for a specific location. Only accessible by Staff - Standard User or System Admin.',
-    bodyParams: ['emailaddress', 'clientlocationid'],
+    description: 'Links a Client - Standard User to a client. Only accessible by Staff - Standard User or System Admin.',
+    bodyParams: ['emailaddress', 'clientid'],
     headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
     NOTE: `
 ──────────────────────────────────────────────────────────────
@@ -135,11 +135,10 @@ const apiDocs = [
 ──────────────────────────────────────────────────────────────
 - Only Staff - Standard User or System Admin can use this endpoint.
 - The emailaddress must belong to a user whose usertype is 'Client - Standard User'.
-- The clientlocationid must exist and be linked to a client (Clientlocations table).
-- If the user is already linked to the client for this location, the API will return a message indicating so.
-- The clientlocationid is the Clientlocations table ID, not the clientID.
+- The clientid must exist in the Clients table.
+- If the user is already linked to the client, the API will return a message indicating so.
 - Once linked, the result can be viewed in the Userclients table (the value is clientID).
-- If the user is not found, or is not a Client - Standard User, or the location is invalid, a clear error is returned.
+- If the user is not found, or is not a Client - Standard User, or the client is invalid, a clear error is returned.
 - **NEW:** Users are now linked to the Client (not just a single location). The response includes the client and an array of all their locations.
 
 ──────────────────────────────────────────────────────────────
@@ -149,7 +148,7 @@ const apiDocs = [
 2. Make a POST request to /api/link-client-user-location with the following JSON body:
    {
      "emailaddress": "clientuser@example.com",
-     "clientlocationid": 9
+     "clientid": 1
    }
 3. Include the JWT token in the Authorization header.
 
@@ -159,7 +158,7 @@ const apiDocs = [
 curl -X POST https://your-api-domain/api/link-client-user-location \
   -H "Authorization: Bearer <JWT token>" \
   -H "Content-Type: application/json" \
-  -d '{"emailaddress": "clientuser@example.com", "clientlocationid": 9}'
+  -d '{"emailaddress": "clientuser@example.com", "clientid": 1}'
 ──────────────────────────────────────────────────────────────
 `,
     example: {
@@ -170,24 +169,24 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
         },
         body: {
           "emailaddress": "clientuser@example.com",
-          "clientlocationid": 9 // This is the Clientlocations table ID, not clientID
+          "clientid": 1 // This is the Clients table ID
         }
       },
       responses: {
         201: { 
           message: 'User linked to client. User now has access to all locations for this client.',
-          client: { id: 3, name: 'Acme Hospital' },
+          client: { id: 1, name: 'Acme Hospital' },
           locations: [
             {
               id: 9,
-              clientid: 3,
+              clientid: 1,
               locationname: 'Main Campus',
               locationaddress: '123 Main St',
               // ...other fields from Clientlocations...
             },
             {
               id: 10,
-              clientid: 3,
+              clientid: 1,
               locationname: 'West Wing',
               locationaddress: '456 West St',
               // ...other fields from Clientlocations...
@@ -196,29 +195,29 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
           ]
         },
         200: { message: 'User is already linked to this client.',
-          client: { id: 3, name: 'Acme Hospital' },
+          client: { id: 1, name: 'Acme Hospital' },
           locations: [
             // ...all locations for this client...
           ]
         },
         400: { message: 'Target user is not a Client - Standard User.' },
-        403: { message: 'Access denied: Only staff or admin can link users to locations.' },
+        403: { message: 'Access denied: Only staff or admin can link users to clients.' },
         404: { message: 'User not found with the provided email address.' },
-        400.1: { message: 'Invalid client location.' }
+        400.1: { message: 'Invalid client.' }
       },
       frontendNotes: `
         - Use the user's email address (not user ID) when calling this endpoint.
         - Only users with usertype 'Client - Standard User' can be linked.
-        - The clientlocationid must be the ID from the Clientlocations table.
+        - The clientid must be the ID from the Clients table.
         - The JWT token in the Authorization header must belong to a user with usertype 'Staff - Standard User' or 'System Admin'.
         - If the user is already linked, you will receive a 200 response with a message and all locations for the client.
-        - If the user is not found, not a client user, or the location is invalid, you will receive a clear error message.
+        - If the user is not found, not a client user, or the client is invalid, you will receive a clear error message.
         - On success, the response includes the client name and an array of all their locations.
         - Example cURL:
           curl -X POST https://your-api-domain/api/link-client-user-location \
             -H "Authorization: Bearer <JWT token for Staff - Standard User or System Admin>" \
             -H "Content-Type: application/json" \
-            -d '{"emailaddress": "clientuser@example.com", "clientlocationid": 9}'
+            -d '{"emailaddress": "clientuser@example.com", "clientid": 1}'
         - **NEW:** The user is now linked to the client, not just a single location. The response always includes all locations for the client.
       `
     }
