@@ -407,14 +407,14 @@ exports.createClientShiftRequest = async (req, res) => {
   }
 };
 
-// Link a client user to a location (can only be done by Staff - Standard User or System Admin)
+// Link a client user to a client (can only be done by Staff - Standard User or System Admin)
 exports.linkClientUserToLocation = async (req, res) => {
-  const { emailaddress, clientlocationid } = req.body;
+  const { emailaddress, clientid } = req.body;
   const requesterType = req.user?.usertype;
 
   // Only Staff - Standard User or System Admin can use this endpoint
   if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can link users to locations.' });
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can link users to clients.' });
   }
 
   try {
@@ -435,15 +435,12 @@ exports.linkClientUserToLocation = async (req, res) => {
     }
     const userid = user.id;
 
-    // Get clientid from the location
-    const [locationRows] = await db.query(
-      'SELECT clientid FROM Clientlocations WHERE id = ?',
-      [clientlocationid]
-    );
-    if (!locationRows.length) {
-      return res.status(400).json({ message: 'Invalid client location.' });
+    // Get client name from Clients table
+    const [clientRows] = await db.query('SELECT id, Name FROM Clients WHERE id = ?', [clientid]);
+    if (!clientRows.length) {
+      return res.status(400).json({ message: 'Invalid client.' });
     }
-    const clientid = locationRows[0].clientid;
+    const clientName = clientRows[0].Name;
 
     // Link user to client in Userclients if not already linked
     const [existing] = await db.query(
@@ -462,13 +459,13 @@ exports.linkClientUserToLocation = async (req, res) => {
     // Fetch all locations for this client
     const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ?', [clientid]);
     res.status(201).json({
-      message: 'User linked to client for this client.',
+      message: 'User linked to client. User now has access to all locations for this client.',
       client: { id: clientid, name: clientName },
       locations
     });
   } catch (err) {
-    logger.error('Link client user to location error', { error: err });
-    res.status(500).json({ message: 'Failed to link client user to location.', error: err.message });
+    logger.error('Link client user to client error', { error: err });
+    res.status(500).json({ message: 'Failed to link client user to client.', error: err.message });
   }
 };
 
