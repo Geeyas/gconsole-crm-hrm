@@ -173,7 +173,17 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
         }
       },
       responses: {
-        201: { message: 'User linked to client for this location.' },
+        201: { 
+          message: 'User linked to client for this location.',
+          client: { id: 3, name: 'Acme Hospital' },
+          location: {
+            id: 9,
+            clientid: 3,
+            locationname: 'Main Campus',
+            locationaddress: '123 Main St',
+            // ...other fields from Clientlocations...
+          }
+        },
         200: { message: 'User is already linked to this client.' },
         400: { message: 'Target user is not a Client - Standard User.' },
         403: { message: 'Access denied: Only staff or admin can link users to locations.' },
@@ -187,6 +197,7 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
         - The JWT token in the Authorization header must belong to a user with usertype 'Staff - Standard User' or 'System Admin'.
         - If the user is already linked, you will receive a 200 response with a message.
         - If the user is not found, not a client user, or the location is invalid, you will receive a clear error message.
+        - On success, the response includes the client name and the full location info.
         - Example cURL:
           curl -X POST https://your-api-domain/api/link-client-user-location \
             -H "Authorization: Bearer <JWT token for Staff - Standard User or System Admin>" \
@@ -304,6 +315,21 @@ curl -X POST https://your-api-domain/api/clientshiftrequests \
       "qualificationid": 12,
       "totalrequiredstaffnumber": 3,
       "additionalvalue": "Day shift, urgent"
+    },
+    response: {
+      201: {
+        message: 'Shift request created successfully.',
+        shift: {
+          id: 123,
+          clientid: 3,
+          clientname: 'Acme Hospital',
+          clientlocationid: 9,
+          // ...other fields from Clientshiftrequests...
+        },
+        staffShifts: [
+          // ...array of created staff shift slots...
+        ]
+      }
     }
   },
   {
@@ -388,7 +414,14 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
       200: {
         description: 'Shift successfully accepted and is now pending approval.',
         body: {
-          message: 'Shift accepted and pending admin approval'
+          message: 'Shift accepted and pending admin approval',
+          shift: {
+            id: 24,
+            clientid: 3,
+            clientname: 'Acme Hospital',
+            clientlocationid: 9,
+            // ...other fields from Clientstaffshifts, LocationName, LocationAddress...
+          }
         }
       },
       400: { message: 'Shift slot is not open for acceptance (e.g., already accepted, approved, or not in "open" status).' },

@@ -394,7 +394,7 @@ exports.createClientShiftRequest = async (req, res) => {
     }
 
     // Return the created shift request and staff shifts
-    const [createdShift] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [clientshiftrequestid]);
+    const [createdShift] = await dbConn.query('SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.id WHERE csr.id = ?', [clientshiftrequestid]);
     const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
     res.status(201).json({
       message: 'Shift request created successfully.',
@@ -457,7 +457,16 @@ exports.linkClientUserToLocation = async (req, res) => {
       'INSERT INTO Userclients (userid, clientid) VALUES (?, ?)',
       [userid, clientid]
     );
-    res.status(201).json({ message: 'User linked to client for this location.' });
+    // Fetch client name and location info
+    const [clientRows] = await db.query('SELECT Name FROM Clients WHERE id = ?', [clientid]);
+    const clientName = clientRows[0]?.Name || null;
+    const [locationInfoRows] = await db.query('SELECT * FROM Clientlocations WHERE id = ?', [clientlocationid]);
+    const locationInfo = locationInfoRows[0] || null;
+    res.status(201).json({
+      message: 'User linked to client for this location.',
+      client: { id: clientid, name: clientName },
+      location: locationInfo
+    });
   } catch (err) {
     logger.error('Link client user to location error', { error: err });
     res.status(500).json({ message: 'Failed to link client user to location.', error: err.message });
@@ -752,7 +761,17 @@ exports.acceptClientStaffShift = async (req, res) => {
       'UPDATE Clientstaffshifts SET Status = ?, Acceptedbyid = ?, Acceptedat = NOW() WHERE id = ?',
       ['pending approval', userId, staffShiftId]
     );
-    res.status(200).json({ message: 'Shift accepted and pending admin approval' });
+    // Fetch updated shift info with client name
+    const [updatedShiftRows] = await db.query(`
+      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname
+      FROM Clientstaffshifts css
+      LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      WHERE css.id = ?
+    `, [staffShiftId]);
+    const updatedShift = updatedShiftRows[0] || null;
+    res.status(200).json({ message: 'Shift accepted and pending admin approval', shift: updatedShift });
   } catch (err) {
     res.status(500).json({ message: 'Failed to accept shift', error: err.message });
   }
