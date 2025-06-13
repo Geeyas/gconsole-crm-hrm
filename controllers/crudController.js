@@ -46,10 +46,10 @@ exports.getAllPaginated = async (req, res, next) => {
   try {
     let results, total;
     if (table.toLowerCase() === 'people') {
-      // Get total count from People
-      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM People`);
+      // Get total count from People (only non-deleted)
+      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM People WHERE deletedat IS NULL`);
       total = countResult[0]?.total || 0;
-      // Get paginated People with joined Users and Usertype
+      // Get paginated People with joined Users and Usertype, only non-deleted
       [results] = await db.query(`
         SELECT 
           p.*, 
@@ -59,6 +59,7 @@ exports.getAllPaginated = async (req, res, next) => {
         LEFT JOIN Users u ON p.Linkeduserid = u.id
         LEFT JOIN Assignedusertypes au ON au.Userid = u.id
         LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+        WHERE p.deletedat IS NULL
         LIMIT ? OFFSET ?
       `, [limit, offset]);
     } else {
