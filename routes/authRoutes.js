@@ -73,15 +73,13 @@ router.get('/tables', authController.getAllTables);
 router.get('/available-client-shifts', authenticate, authController.getAvailableClientShifts);
 
 // Staff: Accept a client staff shift
-// The following handlers are missing in authController and will cause Express to throw an error if used.
-// Commenting out these routes until implemented to prevent 'argument handler must be a function' error.
-// router.post('/clientstaffshifts/:id/accept', authenticate, authorizeEmployeeOrStaffOrAdmin, authController.acceptClientStaffShift);
+router.post('/clientstaffshifts/:id/accept', authenticate, authorizeEmployeeOrStaffOrAdmin, authController.acceptClientStaffShift);
 
 // Staff or Admin: Approve a client staff shift
-// router.post('/clientstaffshifts/:id/approve', authenticate, authorizeStaffOrAdmin, authController.approveClientStaffShift);
+router.post('/clientstaffshifts/:id/approve', authenticate, authorizeStaffOrAdmin, authController.approveClientStaffShift);
 
 // Staff or Admin: Reject a client staff shift
-// router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin, authController.rejectClientStaffShift);
+router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin, authController.rejectClientStaffShift);
 
 // Staff/Admin: Get all clients and their linked locations
 router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, authController.getAllClientLocations); // Changed to use authController prefix

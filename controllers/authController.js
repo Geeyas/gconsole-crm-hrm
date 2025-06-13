@@ -1,10 +1,22 @@
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 const { hashPassword, generateSalt } = require('../utils/hashUtils');
+const winston = require('winston');
 
 const jwtSecret = process.env.JWT_SECRET;
 
-exports.login = async (req, res) => {
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
+
+exports.login = async (req, res, next) => {
   const { username, password } = req.body;
   if (!username || !password)
     return res.status(400).json({ message: 'Username and password required' });
@@ -21,15 +33,15 @@ exports.login = async (req, res) => {
   try {
     const [results] = await db.query(query, [username]);
     if (results.length === 0)
-      return res.status(401).json({ message: 'Invalid username or password' });
+      return res.status(401).json({ message: 'Invalid username or password', code: 'INVALID_CREDENTIALS' });
 
     const user = results[0];
     if (user.deletedat) {
-      return res.status(403).json({ message: 'User account has been deleted' });
+      return res.status(403).json({ message: 'User account has been deleted', code: 'USER_DELETED' });
     }
     const hashedInput = hashPassword(password, user.salt);
     if (hashedInput !== user.passwordhash)
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' });
 
     // Access Token (short-lived)
     const token = jwt.sign(
@@ -69,8 +81,8 @@ exports.login = async (req, res) => {
       portal: user.portal_name
     });
   } catch (err) {
-    console.error('Login DB error:', err);
-    res.status(500).json({ message: 'DB error', error: err });
+    logger.error('Login DB error', { error: err });
+    res.status(500).json({ message: 'DB error', error: err.message, code: 'DB_ERROR' });
   }
 };
 
@@ -149,7 +161,7 @@ exports.register = async (req, res) => {
     res.status(201).json({ message: 'User registered successfully', userId });
 
   } catch (err) {
-    console.error('Register error:', err);
+    logger.error('Register error', { error: err });
     res.status(500).json({ message: 'Registration failed', error: err });
   }
 };
@@ -189,7 +201,7 @@ exports.updatePassword = async (req, res) => {
 
     res.status(200).json({ message: 'Password updated successfully' });
   } catch (err) {
-    console.error('Password update error:', err);
+    logger.error('Password update error', { error: err });
     res.status(500).json({ message: 'Password update failed', error: err });
   }
 };
@@ -202,7 +214,7 @@ exports.getAllTables = async (req, res) => {
     const tables = results.map(row => row.TABLE_NAME);
     res.status(200).json({ tables });
   } catch (err) {
-    console.error('Table fetch error:', err);
+    logger.error('Table fetch error', { error: err });
     res.status(500).json({ message: 'Database error', error: err });
   }
 };
@@ -227,7 +239,7 @@ exports.getUsertypeByPersonId = async (req, res) => {
 
     res.status(200).json(results[0]);
   } catch (err) {
-    console.error('Usertype fetch error:', err);
+    logger.error('Usertype fetch error', { error: err });
     res.status(500).json({ message: 'Database error', error: err });
   }
 };
@@ -297,7 +309,7 @@ exports.updateUserProfile = async (req, res) => {
 
     res.status(200).json({ message: 'User profile updated successfully' });
   } catch (err) {
-    console.error('Update error:', err);
+    logger.error('Update error', { error: err });
     res.status(500).json({ message: 'Failed to update profile', error: err.message });
   }
 };
@@ -390,7 +402,7 @@ exports.createClientShiftRequest = async (req, res) => {
       staffShifts: createdStaffShifts
     });
   } catch (err) {
-    console.error('Create shift request error:', err);
+    logger.error('Create shift request error', { error: err });
     res.status(500).json({ message: 'Failed to create shift request.', error: err.message });
   }
 };
@@ -447,7 +459,7 @@ exports.linkClientUserToLocation = async (req, res) => {
     );
     res.status(201).json({ message: 'User linked to client for this location.' });
   } catch (err) {
-    console.error('Link client user to location error:', err);
+    logger.error('Link client user to location error', { error: err });
     res.status(500).json({ message: 'Failed to link client user to location.', error: err.message });
   }
 };
@@ -495,7 +507,7 @@ exports.getMyClientLocations = async (req, res) => {
     }));
     res.status(200).json({ locations: result });
   } catch (err) {
-    console.error('Get my client locations error:', err);
+    logger.error('Get my client locations error', { error: err });
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
@@ -540,7 +552,7 @@ exports.getAllClientLocations = async (req, res) => {
     res.status(200).json({ clients: groupedClients });
 
   } catch (err) {
-    console.error('Get all client locations error:', err);
+    logger.error('Get all client locations error', { error: err });
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
@@ -580,7 +592,7 @@ exports.softDeletePerson = async (req, res) => {
     }
     res.status(200).json({ message: 'Person soft-deleted (and user if linked)' });
   } catch (err) {
-    console.error('Soft-delete person error:', err);
+    logger.error('Soft-delete person error', { error: err });
     res.status(500).json({ message: 'Soft-delete error', error: err });
   }
 };
@@ -655,7 +667,7 @@ exports.getAvailableClientShifts = async (req, res) => {
                csr.Totalrequiredstaffnumber,
                COUNT(css.id) AS total_slots,
                SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
-               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
+               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) as pending_slots,
                SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
@@ -699,12 +711,108 @@ exports.getAvailableClientShifts = async (req, res) => {
         Endtime: formatDateTime(row.Endtime)
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+    } else if (userType) {
+      // If userType is present but not recognized, return 403
+      return res.status(403).json({ message: 'Access denied: Unknown user type', code: 'ACCESS_DENIED' });
     } else {
-      return res.status(403).json({ message: 'Access denied' });
+      // If userType is missing, treat as unauthorized
+      return res.status(401).json({ message: 'Unauthorized: No user type', code: 'UNAUTHORIZED' });
     }
   } catch (err) {
-    console.error('Get available client shifts error:', err);
+    logger.error('Get available client shifts error', { error: err });
     res.status(500).json({ message: 'Error fetching available shifts', error: err });
+  }
+};
+
+// Accept a client staff shift (Employee, Staff, Admin)
+exports.acceptClientStaffShift = async (req, res) => {
+  const staffShiftId = req.params.id;
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  try {
+    // 1. Check if the shift exists and is open
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift slot not found' });
+    }
+    const shift = rows[0];
+    if (shift.Status !== 'open') {
+      return res.status(400).json({ message: 'Shift slot is not open for acceptance' });
+    }
+    // 2. Only allow Employee, Staff, or Admin
+    if (
+      userType !== 'Employee - Standard User' &&
+      userType !== 'Staff - Standard User' &&
+      userType !== 'System Admin'
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can accept shifts.' });
+    }
+    // 3. Mark the shift as pending approval and assign to user
+    await db.query(
+      'UPDATE Clientstaffshifts SET Status = ?, Acceptedbyid = ?, Acceptedat = NOW() WHERE id = ?',
+      ['pending approval', userId, staffShiftId]
+    );
+    res.status(200).json({ message: 'Shift accepted and pending admin approval' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to accept shift', error: err.message });
+  }
+};
+
+// Approve a client staff shift (Staff/Admin)
+exports.approveClientStaffShift = async (req, res) => {
+  const staffShiftId = req.params.id;
+  const userType = req.user?.usertype;
+  try {
+    // Only Staff or Admin can approve
+    if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+      return res.status(403).json({ message: 'Access denied: Only staff or admin can approve shifts.' });
+    }
+    // Check if the shift exists and is pending approval
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift slot not found' });
+    }
+    const shift = rows[0];
+    if (shift.Status !== 'pending approval') {
+      return res.status(400).json({ message: 'Shift slot is not pending approval' });
+    }
+    // Approve the shift
+    await db.query(
+      'UPDATE Clientstaffshifts SET Status = ?, Approvedat = NOW(), Approvedbyid = ? WHERE id = ?',
+      ['approved', req.user.id, staffShiftId]
+    );
+    res.status(200).json({ message: 'Shift approved' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to approve shift', error: err.message });
+  }
+};
+
+// Reject a client staff shift (Staff/Admin)
+exports.rejectClientStaffShift = async (req, res) => {
+  const staffShiftId = req.params.id;
+  const userType = req.user?.usertype;
+  try {
+    // Only Staff or Admin can reject
+    if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+      return res.status(403).json({ message: 'Access denied: Only staff or admin can reject shifts.' });
+    }
+    // Check if the shift exists and is pending approval
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift slot not found' });
+    }
+    const shift = rows[0];
+    if (shift.Status !== 'pending approval') {
+      return res.status(400).json({ message: 'Shift slot is not pending approval' });
+    }
+    // Reject the shift: set status back to open, clear accepted fields
+    await db.query(
+      'UPDATE Clientstaffshifts SET Status = ?, Acceptedbyid = NULL, Acceptedat = NULL, Approvedat = NULL, Approvedbyid = NULL WHERE id = ?',
+      ['open', staffShiftId]
+    );
+    res.status(200).json({ message: 'Shift rejected and reopened' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to reject shift', error: err.message });
   }
 };
 

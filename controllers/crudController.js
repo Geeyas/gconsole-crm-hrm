@@ -1,6 +1,19 @@
 const db = require('../config/db');
+const winston = require('winston');
 
 let validTables = new Set(); // Stores valid table names
+
+// Configure winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
 
 // Load all table names on app start
 async function loadTableNames() {
@@ -22,9 +35,9 @@ function isValidTable(table) {
 
 // --- CONTROLLER FUNCTIONS ---
 
-exports.getAllPaginated = async (req, res) => {
+exports.getAllPaginated = async (req, res, next) => {
   const table = req.params.table;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   const limit = parseInt(req.query.limit) || 10;
   const page = parseInt(req.query.page) || 1;
@@ -63,43 +76,43 @@ exports.getAllPaginated = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Fetch error:', err);
-    res.status(500).json({ message: 'Fetch error', error: err });
+    logger.error('Fetch error', { error: err });
+    res.status(500).json({ message: 'Fetch error', error: err.message, code: 'FETCH_ERROR' });
   }
 };
 
 
 exports.getAll = async (req, res) => {
   const table = req.params.table;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
     const [results] = await db.query(`SELECT * FROM ??`, [table]);
     res.status(200).json(results);
   } catch (err) {
-    console.error('Fetch error:', err);
-    res.status(500).json({ message: 'Fetch error', error: err });
+    logger.error('Fetch error', { error: err });
+    res.status(500).json({ message: 'Fetch error', error: err.message, code: 'FETCH_ERROR' });
   }
 };
 
 exports.getOne = async (req, res) => {
   const table = req.params.table;
   const id = req.params.id;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
     const [results] = await db.query(`SELECT * FROM ?? WHERE id = ?`, [table, id]);
-    if (results.length === 0) return res.status(404).json({ message: 'Record not found' });
+    if (results.length === 0) return res.status(404).json({ message: 'Record not found', code: 'NOT_FOUND' });
     res.status(200).json(results[0]);
   } catch (err) {
-    console.error('Fetch error:', err);
-    res.status(500).json({ message: 'Fetch error', error: err });
+    logger.error('Fetch error', { error: err });
+    res.status(500).json({ message: 'Fetch error', error: err.message, code: 'FETCH_ERROR' });
   }
 };
 
 exports.create = async (req, res) => {
   const table = req.params.table;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   const fields = Object.keys(req.body);
   const values = Object.values(req.body);
@@ -110,15 +123,15 @@ exports.create = async (req, res) => {
     const [results] = await db.query(query, [table, ...values]);
     res.status(201).json({ message: 'Record created', id: results.insertId });
   } catch (err) {
-    console.error('Insert error:', err);
-    res.status(500).json({ message: 'Insert error', error: err });
+    logger.error('Insert error', { error: err });
+    res.status(500).json({ message: 'Insert error', error: err.message, code: 'INSERT_ERROR' });
   }
 };
 
 exports.update = async (req, res) => {
   const table = req.params.table;
   const id = req.params.id;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   const fields = Object.keys(req.body);
   const values = Object.values(req.body);
@@ -128,26 +141,26 @@ exports.update = async (req, res) => {
     const query = `UPDATE ?? SET ${setClause} WHERE id = ?`;
     const [results] = await db.query(query, [table, ...values, id]);
 
-    if (results.affectedRows === 0) return res.status(404).json({ message: 'Not found' });
+    if (results.affectedRows === 0) return res.status(404).json({ message: 'Not found', code: 'NOT_FOUND' });
     res.status(200).json({ message: 'Record updated' });
   } catch (err) {
-    console.error('Update error:', err);
-    res.status(500).json({ message: 'Update error', error: err });
+    logger.error('Update error', { error: err });
+    res.status(500).json({ message: 'Update error', error: err.message, code: 'UPDATE_ERROR' });
   }
 };
 
 exports.remove = async (req, res) => {
   const table = req.params.table;
   const id = req.params.id;
-  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name' });
+  if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
     const [results] = await db.query(`DELETE FROM ?? WHERE id = ?`, [table, id]);
-    if (results.affectedRows === 0) return res.status(404).json({ message: 'Not found' });
+    if (results.affectedRows === 0) return res.status(404).json({ message: 'Not found', code: 'NOT_FOUND' });
     res.status(200).json({ message: 'Record deleted' });
   } catch (err) {
-    console.error('Delete error:', err);
-    res.status(500).json({ message: 'Delete error', error: err });
+    logger.error('Delete error', { error: err });
+    res.status(500).json({ message: 'Delete error', error: err.message, code: 'DELETE_ERROR' });
   }
 };
 
@@ -184,7 +197,7 @@ exports.getPeoplePaginated = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Fetch People paginated error:', err);
-    res.status(500).json({ message: 'Fetch error', error: err });
+    logger.error('Fetch People paginated error', { error: err });
+    res.status(500).json({ message: 'Fetch error', error: err.message, code: 'FETCH_ERROR' });
   }
 };

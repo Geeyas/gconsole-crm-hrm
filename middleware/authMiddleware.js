@@ -24,6 +24,7 @@ const authenticate = async (req, res, next) => {
         return res.status(401).json({ message: 'Session invalid due to password change. Please log in again.', code: 'TOKEN_PASSWORD_CHANGED' });
       }
       req.user = decoded; // Adds the decoded user data to the request
+      // Do not reject here for unknown usertype; let controller handle it
       next();
     } catch (dbErr) {
       return res.status(500).json({ message: 'Authentication error. Please try again later.', code: 'AUTH_DB_ERROR' });
