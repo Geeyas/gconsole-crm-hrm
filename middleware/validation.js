@@ -19,10 +19,23 @@ const createShiftValidation = [
     }),
   body('starttime')
     .notEmpty().withMessage('starttime is required')
-    .matches(/^\d{2}:\d{2}(:\d{2})?$/).withMessage('starttime must be in HH:MM or HH:MM:SS format'),
+    .matches(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/)
+    .withMessage('starttime must be in YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS format'),
   body('endtime')
     .notEmpty().withMessage('endtime is required')
-    .matches(/^\d{2}:\d{2}(:\d{2})?$/).withMessage('endtime must be in HH:MM or HH:MM:SS format'),
+    .matches(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/)
+    .withMessage('endtime must be in YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS format')
+    .custom((value, { req }) => {
+      const start = new Date(req.body.starttime);
+      const end = new Date(value);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error('Invalid datetime format for starttime or endtime');
+      }
+      if (end <= start) {
+        throw new Error('endtime must be after starttime');
+      }
+      return true;
+    }),
   body('qualificationid')
     .notEmpty().withMessage('qualificationid is required')
     .isInt({ min: 1 }).withMessage('qualificationid must be a positive integer'),

@@ -303,41 +303,47 @@ curl -X GET https://your-api-domain/api/my-client-locations \
       'totalrequiredstaffnumber',
       'additionalvalue'
     ],
-    NOTE: `
-──────────────────────────────────────────────────────────────
-**How this API works:**
-──────────────────────────────────────────────────────────────
-- Client users can only raise shifts for their assigned locations (must be linked in Userclients).
-- Staff - Standard User and System Admin can raise shifts for any location.
-- The clientlocationid must exist and be linked to a client.
-- The qualificationid must exist in Lookups and be of type Qualification.
-- The API will create N staff shift slots in Clientstaffshifts, where N = totalrequiredstaffnumber. Each staff shift slot will have Status = "open" until accepted.
-
-──────────────────────────────────────────────────────────────
-**How to use this API:**
-──────────────────────────────────────────────────────────────
-1. Log in as a Client - Standard User, Staff - Standard User, or System Admin and get the JWT token.
-2. Make a POST request to /api/clientshiftrequests with the required fields in the JSON body.
-3. Include the JWT token in the Authorization header.
-4. The response will include the created shift request and staff shifts.
-
-──────────────────────────────────────────────────────────────
-**Example cURL:**
-──────────────────────────────────────────────────────────────
-curl -X POST https://your-api-domain/api/clientshiftrequests \
-  -H "Authorization: Bearer <JWT token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "clientlocationid": 9,
-    "shiftdate": "2025-06-05",
-    "starttime": "08:00",
-    "endtime": "16:00",
-    "qualificationid": 12,
-    "totalrequiredstaffnumber": 3,
-    "additionalvalue": "Day shift, urgent"
-  }'
-──────────────────────────────────────────────────────────────
-`,
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Client users can only raise shifts for their assigned locations (must be linked in Userclients).',
+      '- Staff - Standard User and System Admin can raise shifts for any location.',
+      '- The clientlocationid must exist and be linked to a client.',
+      '- The qualificationid must exist in Lookups and be of type Qualification.',
+      '- The API will create N staff shift slots in Clientstaffshifts, where N = totalrequiredstaffnumber. Each staff shift slot will have Status = "open" until accepted.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**How to use this API:**',
+      '──────────────────────────────────────────────────────────────',
+      '1. Log in as a Client - Standard User, Staff - Standard User, or System Admin and get the JWT token.',
+      '2. Make a POST request to /api/clientshiftrequests with the required fields in the JSON body.',
+      '3. Include the JWT token in the Authorization header.',
+      '4. The response will include the created shift request and staff shifts.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Datetime Format Update:**',
+      '──────────────────────────────────────────────────────────────',
+      '- The starttime and endtime fields must now be full datetime strings in the format YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS (e.g., 2025-06-20 08:00).',
+      '- Both fields are required and endtime must be after starttime.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X POST https://your-api-domain/api/clientshiftrequests \\ ',
+      '  -H "Authorization: Bearer <JWT token>" \\ ',
+      '  -H "Content-Type: application/json" \\ ',
+      '  -d \'{',
+      '    "clientlocationid": 9,',
+      '    "shiftdate": "2025-06-05",',
+      '    "starttime": "2025-06-05 08:00:00",',
+      '    "endtime": "2025-06-05 16:00:00",',
+      '    "qualificationid": 12,',
+      '    "totalrequiredstaffnumber": 3,',
+      '    "additionalvalue": "Day shift, urgent"',
+      '  }\'',
+      '──────────────────────────────────────────────────────────────'
+    ].join('\n'),
     example: {
       "clientlocationid": 9,
       "shiftdate": "2025-06-05",
