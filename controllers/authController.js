@@ -754,7 +754,7 @@ exports.acceptClientStaffShift = async (req, res) => {
     }
     // 3. Mark the shift as pending approval and assign to user
     await db.query(
-      'UPDATE Clientstaffshifts SET Status = ?, Acceptedbyid = ?, Acceptedat = NOW() WHERE id = ?',
+      'UPDATE Clientstaffshifts SET Status = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
       ['pending approval', userId, staffShiftId]
     );
     // Fetch updated shift info with client name
