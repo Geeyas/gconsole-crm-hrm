@@ -653,7 +653,7 @@ exports.getAvailableClientShifts = async (req, res) => {
           `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
            FROM Clientstaffshifts css
            LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')}) AND css.Deletedat IS NULL`,
           shiftIds
         );
         staffShifts = staffRows;
@@ -710,7 +710,7 @@ exports.getAvailableClientShifts = async (req, res) => {
           `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
            FROM Clientstaffshifts css
            LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')}) AND css.Deletedat IS NULL`,
           shiftIds
         );
         staffShifts = staffRows;
