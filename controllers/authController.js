@@ -791,6 +791,14 @@ exports.acceptClientStaffShift = async (req, res) => {
     ) {
       return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can accept shifts.' });
     }
+    // 2. Prevent double-booking: check if user already accepted/assigned to another slot for this shift request
+    const [existingAssignments] = await db.query(
+      'SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Assignedtouserid = ? AND Deletedat IS NULL AND id != ? AND Status IN ("pending approval", "approved", "open")',
+      [shift.Clientshiftrequestid, userId, staffShiftId]
+    );
+    if (existingAssignments.length > 0) {
+      return res.status(400).json({ message: 'You have already accepted or are assigned to another slot for this shift.' });
+    }
     // 3. Mark the shift as pending approval and assign to user
     await db.query(
       'UPDATE Clientstaffshifts SET Status = ?, Assignedtouserid = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
