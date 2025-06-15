@@ -395,6 +395,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
       403: 'Access denied'
     },
     NOTE: `
+    available-client-shifts?page=1&limit=50    -- sample to call the pagination data
 ──────────────────────────────────────────────────────────────
 **How this API works (explained simply):**
 ──────────────────────────────────────────────────────────────

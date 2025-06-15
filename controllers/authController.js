@@ -636,59 +636,91 @@ exports.getAvailableClientShifts = async (req, res) => {
       [rows] = await db.query(`
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
-               csr.Totalrequiredstaffnumber,
-               COUNT(css.id) AS total_slots,
-               SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
-               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) AS pending_slots,
-               SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
+               csr.Totalrequiredstaffnumber
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
-        LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
-        GROUP BY csr.id
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
-      // Format dates for output
+      // For each shift request, get its staff shifts and their statuses
+      const shiftIds = rows.map(row => row.shiftrequestid);
+      let staffShifts = [];
+      if (shiftIds.length) {
+        const [staffRows] = await db.query(
+          `SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+          shiftIds
+        );
+        staffShifts = staffRows;
+      }
+      // Group staff shifts by shiftrequestid
+      const staffShiftsByRequest = {};
+      staffShifts.forEach(s => {
+        if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
+        staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+      });
+      // Format output
       const formatted = rows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime)
+        Endtime: formatDateTime(row.Endtime),
+        StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
-    } else if (userType === 'Client - Standard User') {
-      // Client: See all shifts for their own hospital(s)
-      const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-      if (!clientRows.length) return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
-      const clientIds = clientRows.map(r => r.clientid);
+    } else if (userType === 'Client - Standard User' || userType === 'System Admin' || userType === 'Staff - Standard User') {
+      // For Client, System Admin, and Staff - Standard User: See all shifts for their own hospital(s) or all
+      let clientIds = [];
+      if (userType === 'Client - Standard User') {
+        const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
+        if (!clientRows.length) return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
+        clientIds = clientRows.map(r => r.clientid);
+      }
       // Get total count
-      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})`, clientIds);
+      const countQuery = userType === 'Client - Standard User'
+        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})`
+        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr`;
+      const countParams = userType === 'Client - Standard User' ? clientIds : [];
+      const [countResult] = await db.query(countQuery, countParams);
       total = countResult[0]?.total || 0;
-      [rows] = await db.query(`
+      const shiftQuery = `
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
-               csr.Totalrequiredstaffnumber,
-               COUNT(css.id) AS total_slots,
-               SUM(CASE WHEN css.Status = 'open' THEN 1 ELSE 0 END) AS open_slots,
-               SUM(CASE WHEN css.Status = 'pending approval' THEN 1 ELSE 0 END) as pending_slots,
-               SUM(CASE WHEN css.Status = 'approved' THEN 1 ELSE 0 END) AS approved_slots
+               csr.Totalrequiredstaffnumber
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
-        LEFT JOIN Clientstaffshifts css ON css.Clientshiftrequestid = csr.id
-        WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})
-        GROUP BY csr.id
+        ${userType === 'Client - Standard User' ? `WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})` : ''}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
-      `, [...clientIds, limit, offset]);
-      const formatted = rows.map(row => ({
+      `;
+      const shiftParams = userType === 'Client - Standard User' ? [...clientIds, limit, offset] : [limit, offset];
+      const [shiftRows] = await db.query(shiftQuery, shiftParams);
+      // For each shift request, get its staff shifts and their statuses
+      const shiftIds = shiftRows.map(row => row.shiftrequestid);
+      let staffShifts = [];
+      if (shiftIds.length) {
+        const [staffRows] = await db.query(
+          `SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+          shiftIds
+        );
+        staffShifts = staffRows;
+      }
+      // Group staff shifts by shiftrequestid
+      const staffShiftsByRequest = {};
+      staffShifts.forEach(s => {
+        if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
+        staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+      });
+      // Format output
+      const formatted = shiftRows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime)
+        Endtime: formatDateTime(row.Endtime),
+        StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
