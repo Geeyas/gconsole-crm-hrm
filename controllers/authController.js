@@ -630,7 +630,7 @@ exports.getAvailableClientShifts = async (req, res) => {
     let rows, total;
     if (userType === 'System Admin' || userType === 'Staff - Standard User') {
       // Get total count
-      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr`);
+      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL`);
       total = countResult[0]?.total || 0;
       // Admin/Staff: See all shifts for all hospitals/locations
       [rows] = await db.query(`
@@ -641,6 +641,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
+        WHERE csr.deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
@@ -649,7 +650,10 @@ exports.getAvailableClientShifts = async (req, res) => {
       let staffShifts = [];
       if (shiftIds.length) {
         const [staffRows] = await db.query(
-          `SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+           FROM Clientstaffshifts css
+           LEFT JOIN Users u ON css.Assignedtouserid = u.id
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
           shiftIds
         );
         staffShifts = staffRows;
@@ -679,8 +683,8 @@ exports.getAvailableClientShifts = async (req, res) => {
       }
       // Get total count
       const countQuery = userType === 'Client - Standard User'
-        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})`
-        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr`;
+        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})`
+        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL`;
       const countParams = userType === 'Client - Standard User' ? clientIds : [];
       const [countResult] = await db.query(countQuery, countParams);
       total = countResult[0]?.total || 0;
@@ -692,7 +696,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
-        ${userType === 'Client - Standard User' ? `WHERE csr.clientid IN (${clientIds.map(() => '?').join(',')})` : ''}
+        ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})` : 'WHERE csr.deletedat IS NULL'}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `;
@@ -703,7 +707,10 @@ exports.getAvailableClientShifts = async (req, res) => {
       let staffShifts = [];
       if (shiftIds.length) {
         const [staffRows] = await db.query(
-          `SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+           FROM Clientstaffshifts css
+           LEFT JOIN Users u ON css.Assignedtouserid = u.id
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
           shiftIds
         );
         staffShifts = staffRows;
@@ -786,8 +793,8 @@ exports.acceptClientStaffShift = async (req, res) => {
     }
     // 3. Mark the shift as pending approval and assign to user
     await db.query(
-      'UPDATE Clientstaffshifts SET Status = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
-      ['pending approval', userId, staffShiftId]
+      'UPDATE Clientstaffshifts SET Status = ?, Assignedtouserid = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
+      ['pending approval', userId, userId, staffShiftId]
     );
     // Fetch updated shift info with client name
     const [updatedShiftRows] = await db.query(`
