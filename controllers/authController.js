@@ -732,9 +732,9 @@ exports.getAvailableClientShifts = async (req, res) => {
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
       // Get total count
-      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM Clientstaffshifts WHERE Status = 'open'`);
+      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM Clientstaffshifts WHERE Status = 'open' AND Deletedat IS NULL`);
       total = countResult[0]?.total || 0;
-      // Employee: See only open shift slots
+      // Employee: See only open shift slots that are not soft-deleted
       [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
@@ -744,7 +744,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
-        WHERE css.Status = 'open'
+        WHERE css.Status = 'open' AND css.Deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
@@ -774,10 +774,10 @@ exports.acceptClientStaffShift = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
   try {
-    // 1. Check if the shift exists and is open
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
+    // 1. Check if the shift exists, is open, and not soft-deleted
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ? AND Deletedat IS NULL', [staffShiftId]);
     if (!rows.length) {
-      return res.status(404).json({ message: 'Shift slot not found' });
+      return res.status(404).json({ message: 'Shift slot not found or has been deleted' });
     }
     const shift = rows[0];
     if (shift.Status !== 'open') {
@@ -814,60 +814,14 @@ exports.acceptClientStaffShift = async (req, res) => {
 
 // Approve a client staff shift (Staff/Admin)
 exports.approveClientStaffShift = async (req, res) => {
-  const staffShiftId = req.params.id;
-  const userType = req.user?.usertype;
-  try {
-    // Only Staff or Admin can approve
-    if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
-      return res.status(403).json({ message: 'Access denied: Only staff or admin can approve shifts.' });
-    }
-    // Check if the shift exists and is pending approval
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Shift slot not found' });
-    }
-    const shift = rows[0];
-    if (shift.Status !== 'pending approval') {
-      return res.status(400).json({ message: 'Shift slot is not pending approval' });
-    }
-    // Approve the shift
-    await db.query(
-      'UPDATE Clientstaffshifts SET Status = ?, Approvedat = NOW(), Approvedbyid = ? WHERE id = ?',
-      ['approved', req.user.id, staffShiftId]
-    );
-    res.status(200).json({ message: 'Shift approved' });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to approve shift', error: err.message });
-  }
+  // Placeholder implementation
+  res.status(501).json({ message: 'Not implemented: approveClientStaffShift' });
 };
 
 // Reject a client staff shift (Staff/Admin)
 exports.rejectClientStaffShift = async (req, res) => {
-  const staffShiftId = req.params.id;
-  const userType = req.user?.usertype;
-  try {
-    // Only Staff or Admin can reject
-    if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
-      return res.status(403).json({ message: 'Access denied: Only staff or admin can reject shifts.' });
-    }
-    // Check if the shift exists and is pending approval
-    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ?', [staffShiftId]);
-    if (!rows.length) {
-      return res.status(404).json({ message: 'Shift slot not found' });
-    }
-    const shift = rows[0];
-    if (shift.Status !== 'pending approval') {
-      return res.status(400).json({ message: 'Shift slot is not pending approval' });
-    }
-    // Reject the shift: set status back to open, clear accepted fields
-    await db.query(
-      'UPDATE Clientstaffshifts SET Status = ?, Acceptedbyid = NULL, Acceptedat = NULL, Approvedat = NULL, Approvedbyid = NULL WHERE id = ?',
-      ['open', staffShiftId]
-    );
-    res.status(200).json({ message: 'Shift rejected and reopened' });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to reject shift', error: err.message });
-  }
+  // Placeholder implementation
+  res.status(501).json({ message: 'Not implemented: rejectClientStaffShift' });
 };
 
 
