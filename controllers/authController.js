@@ -832,4 +832,29 @@ exports.rejectClientStaffShift = async (req, res) => {
   res.status(501).json({ message: 'Not implemented: rejectClientStaffShift' });
 };
 
+// Get all clients with their locations (no auth required)
+exports.getClientLocations = async (req, res) => {
+  try {
+    // Debug: log that the function is called
+    console.log('[getClientLocations] Called');
+    // Get all clients
+    const [clients] = await db.query('SELECT * FROM Clients');
+    // Get all locations
+    const [locations] = await db.query('SELECT * FROM Clientlocations');
+    // Debug: log counts
+    console.log(`[getClientLocations] Clients: ${clients.length}, Locations: ${locations.length}`);
+    // Map locations to their client
+    const clientMap = clients.map(client => {
+      return {
+        ...client,
+        locations: locations.filter(loc => loc.Clientid === client.ID)
+      };
+    });
+    res.status(200).json({ clients: clientMap });
+  } catch (err) {
+    console.error('[getClientLocations] Error:', err);
+    res.status(500).json({ message: 'Error fetching client locations', error: err.message });
+  }
+};
+
 

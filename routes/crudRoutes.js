@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const crudController = require('../controllers/crudController');
+const authController = require('../controllers/authController');
 const { body, validationResult } = require('express-validator');
 
 // Validation middleware for create/update
@@ -21,6 +22,8 @@ function validateCrudFields(req, res, next) {
 
 // router.get('/:table/paginated', crudController.getAllPaginated);
 router.get('/:table/paginated', crudController.getAllPaginated);
+// GET /clientLocation - get all clients with their locations (no auth required)
+router.get('/clientLocation', authController.getClientLocations);
 router.get('/:table', crudController.getAll);
 router.get('/:table/:id', crudController.getOne);
 router.post('/:table', validateCrudFields, crudController.create);
