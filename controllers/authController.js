@@ -2,6 +2,8 @@ const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 const { hashPassword, generateSalt } = require('../utils/hashUtils');
 const winston = require('winston');
+const { sendMail } = require('../mailer/mailer');
+const mailTemplates = require('../mailer/templates');
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -806,14 +808,43 @@ exports.acceptClientStaffShift = async (req, res) => {
     );
     // Fetch updated shift info with client name
     const [updatedShiftRows] = await db.query(`
-      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname
+      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName
       FROM Clientstaffshifts css
       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
       LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON css.Assignedtouserid = u.id
       WHERE css.id = ?
     `, [staffShiftId]);
     const updatedShift = updatedShiftRows[0] || null;
+    // Notify all clients for this shift
+    if (updatedShift) {
+      // Get all client emails for this client
+      const [clientUsers] = await db.query(`
+        SELECT u.email, c.Name as clientName
+        FROM Userclients uc
+        LEFT JOIN Users u ON uc.userid = u.id
+        LEFT JOIN Clients c ON uc.clientid = c.id
+        WHERE uc.clientid = ?
+      `, [updatedShift.Clientid]);
+      for (const client of clientUsers) {
+        const template = mailTemplates.shiftAcceptedClient({
+          clientName: client.clientName,
+          locationName: updatedShift.LocationName,
+          shiftDate: updatedShift.Shiftdate,
+          startTime: updatedShift.Starttime,
+          endTime: updatedShift.Endtime,
+          employeeName: updatedShift.employeeName || 'An employee'
+        });
+        if (client.email) {
+          sendMail({
+            to: client.email,
+            subject: template.subject,
+            html: template.html
+          }).catch(e => logger.error('Email send error (accept shift)', { error: e }));
+        }
+      }
+    }
     res.status(200).json({ message: 'Shift accepted and pending admin approval', shift: updatedShift });
   } catch (err) {
     res.status(500).json({ message: 'Failed to accept shift', error: err.message });
@@ -822,14 +853,142 @@ exports.acceptClientStaffShift = async (req, res) => {
 
 // Approve a client staff shift (Staff/Admin)
 exports.approveClientStaffShift = async (req, res) => {
-  // Placeholder implementation
-  res.status(501).json({ message: 'Not implemented: approveClientStaffShift' });
+  const staffShiftId = req.params.id;
+  const approverId = req.user?.id;
+  const userType = req.user?.usertype;
+  if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can approve shifts.' });
+  }
+  try {
+    // 1. Get the shift
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ? AND Deletedat IS NULL', [staffShiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift slot not found or has been deleted' });
+    }
+    const shift = rows[0];
+    if (shift.Status !== 'pending approval') {
+      return res.status(400).json({ message: 'Shift slot is not pending approval' });
+    }
+    // 2. Approve the shift
+    await db.query(
+      'UPDATE Clientstaffshifts SET Status = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
+      ['approved', approverId, staffShiftId]
+    );
+    // 3. Fetch updated shift info
+    const [updatedShiftRows] = await db.query(`
+      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName, u.email as employeeEmail, csr.Shiftdate AS Shiftdate, csr.Starttime AS Starttime, csr.Endtime AS Endtime
+      FROM Clientstaffshifts css
+      LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON css.Assignedtouserid = u.id
+      WHERE css.id = ?
+    `, [staffShiftId]);
+    const updatedShift = updatedShiftRows[0] || null;
+    // 4. Notify employee and client
+    if (updatedShift) {
+      // Notify employee
+      if (updatedShift.employeeEmail) {
+        const templateEmp = mailTemplates.shiftApprovedEmployee({
+          employeeName: updatedShift.employeeName,
+          clientName: updatedShift.clientname,
+          locationName: updatedShift.LocationName,
+          shiftDate: updatedShift.Shiftdate,
+          startTime: updatedShift.Starttime,
+          endTime: updatedShift.Endtime
+        });
+        sendMail({
+          to: updatedShift.employeeEmail,
+          subject: templateEmp.subject,
+          html: templateEmp.html
+        }).catch(e => logger.error('Email send error (approve shift to employee)', { error: e }));
+      }
+      // Notify all client users
+      const [clientUsers] = await db.query(`
+        SELECT u.email, c.Name as clientName
+        FROM Userclients uc
+        LEFT JOIN Users u ON uc.userid = u.id
+        LEFT JOIN Clients c ON uc.clientid = c.id
+        WHERE uc.clientid = ?
+      `, [updatedShift.Clientid]);
+      for (const client of clientUsers) {
+        const templateClient = mailTemplates.shiftApprovedClient({
+          clientName: client.clientName,
+          employeeName: updatedShift.employeeName,
+          locationName: updatedShift.LocationName,
+          shiftDate: updatedShift.Shiftdate,
+          startTime: updatedShift.Starttime,
+          endTime: updatedShift.Endtime
+        });
+        if (client.email) {
+          sendMail({
+            to: client.email,
+            subject: templateClient.subject,
+            html: templateClient.html
+          }).catch(e => logger.error('Email send error (approve shift to client)', { error: e }));
+        }
+      }
+    }
+    res.status(200).json({ message: 'Shift approved and notifications sent', shift: updatedShift });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to approve shift', error: err.message });
+  }
 };
 
 // Reject a client staff shift (Staff/Admin)
 exports.rejectClientStaffShift = async (req, res) => {
-  // Placeholder implementation
-  res.status(501).json({ message: 'Not implemented: rejectClientStaffShift' });
+  const staffShiftId = req.params.id;
+  const rejectorId = req.user?.id;
+  const userType = req.user?.usertype;
+  if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can reject shifts.' });
+  }
+  try {
+    // 1. Get the shift
+    const [rows] = await db.query('SELECT * FROM Clientstaffshifts WHERE id = ? AND Deletedat IS NULL', [staffShiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift slot not found or has been deleted' });
+    }
+    const shift = rows[0];
+    if (shift.Status !== 'pending approval') {
+      return res.status(400).json({ message: 'Shift slot is not pending approval' });
+    }
+    // 2. Reject the shift
+    await db.query(
+      'UPDATE Clientstaffshifts SET Status = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
+      ['rejected', rejectorId, staffShiftId]
+    );
+    // 3. Fetch updated shift info
+    const [updatedShiftRows] = await db.query(`
+      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName, u.email as employeeEmail, csr.Shiftdate AS Shiftdate, csr.Starttime AS Starttime, csr.Endtime AS Endtime
+      FROM Clientstaffshifts css
+      LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON css.Assignedtouserid = u.id
+      WHERE css.id = ?
+    `, [staffShiftId]);
+    const updatedShift = updatedShiftRows[0] || null;
+    // 4. Notify employee
+    if (updatedShift && updatedShift.employeeEmail) {
+      const templateEmp = mailTemplates.shiftRejectedEmployee({
+        employeeName: updatedShift.employeeName,
+        clientName: updatedShift.clientname,
+        locationName: updatedShift.LocationName,
+        shiftDate: updatedShift.Shiftdate,
+        startTime: updatedShift.Starttime,
+        endTime: updatedShift.Endtime
+      });
+      sendMail({
+        to: updatedShift.employeeEmail,
+        subject: templateEmp.subject,
+        html: templateEmp.html
+      }).catch(e => logger.error('Email send error (reject shift to employee)', { error: e }));
+    }
+    res.status(200).json({ message: 'Shift rejected and employee notified', shift: updatedShift });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to reject shift', error: err.message });
+  }
 };
 
 // Get all clients with their locations (no auth required)

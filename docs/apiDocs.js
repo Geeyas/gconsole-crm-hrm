@@ -641,6 +641,11 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
         curl -X GET https://your-api-domain/api/all-client-locations \\\\
           -H "Authorization: Bearer <JWT token for Staff - Standard User or System Admin>"
     `
+  },
+  {
+    method: 'EMAIL',
+    path: 'Automatic',
+    description: 'Email notifications are sent automatically by the backend when a shift is accepted or approved. The frontend does NOT need to trigger any email logic.'
   }
 
 ];
