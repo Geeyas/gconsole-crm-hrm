@@ -18,6 +18,8 @@ const logger = winston.createLogger({
   ],
 });
 
+// ================== login ==================
+// Authenticates a user and returns a JWT token if credentials are valid.
 exports.login = async (req, res, next) => {
   const { username, password } = req.body;
   if (!username || !password)
@@ -87,7 +89,10 @@ exports.login = async (req, res, next) => {
     res.status(500).json({ message: 'DB error', error: err.message, code: 'DB_ERROR' });
   }
 };
+// ================== end login ==================
 
+// ================== refreshToken ==================
+// Issues a new JWT token using a valid refresh token.
 exports.refreshToken = (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) return res.status(401).json({ message: 'No refresh token found' });
@@ -106,7 +111,10 @@ exports.refreshToken = (req, res) => {
     res.json({ token: newtoken });
   });
 };
+// ================== end refreshToken ==================
 
+// ================== register ==================
+// Registers a new user and links them to a person and usertype.
 exports.register = async (req, res) => {
   const { firstname, lastname, username, email, password, usertype_id } = req.body;
   const creatorId = req.user?.id;
@@ -167,7 +175,10 @@ exports.register = async (req, res) => {
     res.status
   }
 };
+// ================== end register ==================
 
+// ================== updatePassword ==================
+// Allows staff or admin to update a user's password.
 exports.updatePassword = async (req, res) => {
   const { username, newPassword } = req.body;
   const updaterId = req.user?.id;
@@ -179,7 +190,6 @@ exports.updatePassword = async (req, res) => {
 
   // Defensive: Accept both application/json and urlencoded
   if (!username || !newPassword) {
-    // Try to parse from req.body if nested (sometimes body is {body: {username, newPassword}})
     if (req.body.body && req.body.body.username && req.body.body.newPassword) {
       req.body = req.body.body;
     }
@@ -187,6 +197,15 @@ exports.updatePassword = async (req, res) => {
 
   if (!username || !newPassword)
     return res.status(400).json({ message: 'Missing fields' });
+
+  // Password security validation
+  // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+  const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+  if (!passwordPolicy.test(newPassword)) {
+    return res.status(400).json({
+      message: 'Password does not meet security requirements. It must be at least 8 characters long and include uppercase, lowercase, number, and special character.'
+    });
+  }
 
   try {
     const [results] = await db.query('SELECT * FROM Users WHERE username = ?', [username]);
@@ -207,7 +226,10 @@ exports.updatePassword = async (req, res) => {
     res.status(500).json({ message: 'Password update failed', error: err });
   }
 };
+// ================== end updatePassword ==================
 
+// ================== getAllTables ==================
+// Returns a list of all tables in the current database.
 exports.getAllTables = async (req, res) => {
   try {
     const [results] = await db.query(
@@ -220,7 +242,10 @@ exports.getAllTables = async (req, res) => {
     res.status(500).json({ message: 'Database error', error: err });
   }
 };
+// ================== end getAllTables ==================
 
+// ================== getUsertypeByPersonId ==================
+// Retrieves usertype and portal info for a given person ID.
 exports.getUsertypeByPersonId = async (req, res) => {
   const personId = req.params.id;
 
@@ -245,7 +270,10 @@ exports.getUsertypeByPersonId = async (req, res) => {
     res.status(500).json({ message: 'Database error', error: err });
   }
 };
+// ================== end getUsertypeByPersonId ==================
 
+// ================== updateUserProfile ==================
+// Updates the profile information for a person and their linked user.
 exports.updateUserProfile = async (req, res) => {
   const personId = req.params.id;
   const updaterId = req.user?.id;
@@ -315,8 +343,10 @@ exports.updateUserProfile = async (req, res) => {
     res.status(500).json({ message: 'Failed to update profile', error: err.message });
   }
 };
+// ================== end updateUserProfile ==================
 
-// Create a client shift request and related staff shifts
+// ================== createClientShiftRequest ==================
+// Creates a new client shift request and related staff shifts.
 exports.createClientShiftRequest = async (req, res) => {
   const dbConn = db;
   const {
@@ -408,8 +438,10 @@ exports.createClientShiftRequest = async (req, res) => {
     res.status(500).json({ message: 'Failed to create shift request.', error: err.message });
   }
 };
+// ================== end createClientShiftRequest ==================
 
-// Link a client user to a client (can only be done by Staff - Standard User or System Admin)
+// ================== linkClientUserToLocation ==================
+// Links a client user to a client and returns their locations.
 exports.linkClientUserToLocation = async (req, res) => {
   const { emailaddress, clientid } = req.body;
   const requesterType = req.user?.usertype;
@@ -470,8 +502,10 @@ exports.linkClientUserToLocation = async (req, res) => {
     res.status(500).json({ message: 'Failed to link client user to client.', error: err.message });
   }
 };
+// ================== end linkClientUserToLocation ==================
 
-// Get client locations assigned to the logged-in client user
+// ================== getMyClientLocations ==================
+// Returns all client locations assigned to the logged-in client user.
 exports.getMyClientLocations = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
@@ -518,8 +552,10 @@ exports.getMyClientLocations = async (req, res) => {
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
+// ================== end getMyClientLocations ==================
 
-// Get all clients and their linked locations (for staff/sys admin)
+// ================== getAllClientLocations ==================
+// Returns all clients and their linked locations (for staff/sys admin).
 exports.getAllClientLocations = async (req, res) => {
   const userType = req.user?.usertype;
   if (userType !== 'Staff - Standard User' && userType !== 'System Admin') {
@@ -563,8 +599,10 @@ exports.getAllClientLocations = async (req, res) => {
     res.status(500).json({ message: 'Error fetching client locations', error: err });
   }
 };
+// ================== end getAllClientLocations ==================
 
-// Soft-delete a person (People table) by setting deletedat and deletedbyid
+// ================== softDeletePerson ==================
+// Soft-deletes a person and their linked user by setting deleted timestamps.
 exports.softDeletePerson = async (req, res) => {
   const personId = req.params.id;
   const deleterId = req.user?.id;
@@ -603,21 +641,10 @@ exports.softDeletePerson = async (req, res) => {
     res.status(500).json({ message: 'Soft-delete error', error: err });
   }
 };
+// ================== end softDeletePerson ==================
 
-const formatDate = (isoString) => {
-  if (!isoString) return null;
-  const d = new Date(isoString);
-  if (isNaN(d)) return isoString;
-  return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: '2-digit' });
-};
-const formatDateTime = (isoString) => {
-  if (!isoString) return null;
-  const d = new Date(isoString);
-  if (isNaN(d)) return isoString;
-  return d.toLocaleString('en-AU', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-};
-
-// Staff: View available client shifts
+// ================== getAvailableClientShifts ==================
+// Returns available client shifts based on user type and permissions.
 exports.getAvailableClientShifts = async (req, res) => {
   const userType = req.user?.usertype;
   const userId = req.user?.id;
@@ -769,8 +796,10 @@ exports.getAvailableClientShifts = async (req, res) => {
     res.status(500).json({ message: 'Error fetching available shifts', error: err });
   }
 };
+// ================== end getAvailableClientShifts ==================
 
-// Accept a client staff shift (Employee, Staff, Admin)
+// ================== acceptClientStaffShift ==================
+// Allows an employee, staff, or admin to accept a client staff shift.
 exports.acceptClientStaffShift = async (req, res) => {
   const staffShiftId = req.params.id;
   const userId = req.user?.id;
@@ -850,8 +879,10 @@ exports.acceptClientStaffShift = async (req, res) => {
     res.status(500).json({ message: 'Failed to accept shift', error: err.message });
   }
 };
+// ================== end acceptClientStaffShift ==================
 
-// Approve a client staff shift (Staff/Admin)
+// ================== approveClientStaffShift ==================
+// Allows staff or admin to approve a client staff shift and sends notifications.
 exports.approveClientStaffShift = async (req, res) => {
   const staffShiftId = req.params.id;
   const approverId = req.user?.id;
@@ -934,8 +965,10 @@ exports.approveClientStaffShift = async (req, res) => {
     res.status(500).json({ message: 'Failed to approve shift', error: err.message });
   }
 };
+// ================== end approveClientStaffShift ==================
 
-// Reject a client staff shift (Staff/Admin)
+// ================== rejectClientStaffShift ==================
+// Allows staff or admin to reject a client staff shift and notifies the employee.
 exports.rejectClientStaffShift = async (req, res) => {
   const staffShiftId = req.params.id;
   const rejectorId = req.user?.id;
@@ -990,8 +1023,10 @@ exports.rejectClientStaffShift = async (req, res) => {
     res.status(500).json({ message: 'Failed to reject shift', error: err.message });
   }
 };
+// ================== end rejectClientStaffShift ==================
 
-// Get all clients with their locations (no auth required)
+// ================== getClientLocations ==================
+// Returns all clients with their locations (no auth required).
 exports.getClientLocations = async (req, res) => {
   try {
     // Debug: log that the function is called
@@ -1015,5 +1050,6 @@ exports.getClientLocations = async (req, res) => {
     res.status(500).json({ message: 'Error fetching client locations', error: err.message });
   }
 };
+// ================== end getClientLocations ==================
 
 
