@@ -436,7 +436,7 @@ exports.createClientShiftRequest = async (req, res) => {
     }
 
     // Return the created shift request and staff shifts
-    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID WHERE csr.ID = ?';
+    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname, cl.LocationName FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID WHERE csr.ID = ?';
     const [createdShift] = await dbConn.query(fetchShiftSql, [clientshiftrequestid]);
     const fetchStaffShiftsSql = 'SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?';
     const [createdStaffShifts] = await dbConn.query(fetchStaffShiftsSql, [clientshiftrequestid]);
@@ -449,8 +449,50 @@ exports.createClientShiftRequest = async (req, res) => {
     const [qualRows] = await dbConn.query(qualNamesSql, [qualificationgroupid]);
     const qualificationname = qualRows.map(q => q.Name);
 
+    // ================== send notifications to employees ==================
+    // Fetch all Employee - Standard User users' emails
+    const [employeeRows] = await dbConn.query(`
+      SELECT u.email, u.fullname
+      FROM Users u
+      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+      WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
+    `);
+    logger.info('Employee notification target list', { count: employeeRows.length, emails: employeeRows.map(e => e.email) });
+    if (employeeRows && employeeRows.length) {
+      const shift = createdShift[0];
+      const locationName = shift.LocationName || '';
+      const clientName = shift.clientname || '';
+      const shiftDate = shift.Shiftdate;
+      const startTime = shift.Starttime;
+      const endTime = shift.Endtime;
+      // Await all emails before responding
+      await Promise.all(employeeRows.map(async (emp) => {
+        logger.info('Sending shift notification email', { to: emp.email });
+        const template = mailTemplates.shiftNewEmployee({
+          employeeName: emp.fullname,
+          locationName,
+          clientName,
+          shiftDate,
+          startTime,
+          endTime,
+          qualificationNames: qualificationname
+        });
+        try {
+          await sendMail({
+            to: emp.email,
+            subject: template.subject,
+            html: template.html
+          });
+        } catch (e) {
+          logger.error('Email send error (new shift to employee)', { error: e, email: emp.email });
+        }
+      }));
+    }
+
+    // Respond only after notifications
     res.status(201).json({
-      message: 'Shift request created successfully.',
+      message: 'Shift request created successfully',
       shift: {
         ...createdShift[0],
         qualificationname, // keep variable name for frontend
@@ -1405,7 +1447,7 @@ exports.createClientShiftRequest = async (req, res) => {
     }
 
     // Return the created shift request and staff shifts
-    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID WHERE csr.ID = ?';
+    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname, cl.LocationName FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID WHERE csr.ID = ?';
     const [createdShift] = await dbConn.query(fetchShiftSql, [clientshiftrequestid]);
     const fetchStaffShiftsSql = 'SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?';
     const [createdStaffShifts] = await dbConn.query(fetchStaffShiftsSql, [clientshiftrequestid]);
@@ -1418,8 +1460,50 @@ exports.createClientShiftRequest = async (req, res) => {
     const [qualRows] = await dbConn.query(qualNamesSql, [qualificationgroupid]);
     const qualificationname = qualRows.map(q => q.Name);
 
+    // ================== send notifications to employees ==================
+    // Fetch all Employee - Standard User users' emails
+    const [employeeRows] = await dbConn.query(`
+      SELECT u.email, u.fullname
+      FROM Users u
+      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+      WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
+    `);
+    logger.info('Employee notification target list', { count: employeeRows.length, emails: employeeRows.map(e => e.email) });
+    if (employeeRows && employeeRows.length) {
+      const shift = createdShift[0];
+      const locationName = shift.LocationName || '';
+      const clientName = shift.clientname || '';
+      const shiftDate = shift.Shiftdate;
+      const startTime = shift.Starttime;
+      const endTime = shift.Endtime;
+      // Await all emails before responding
+      await Promise.all(employeeRows.map(async (emp) => {
+        logger.info('Sending shift notification email', { to: emp.email });
+        const template = mailTemplates.shiftNewEmployee({
+          employeeName: emp.fullname,
+          locationName,
+          clientName,
+          shiftDate,
+          startTime,
+          endTime,
+          qualificationNames: qualificationname
+        });
+        try {
+          await sendMail({
+            to: emp.email,
+            subject: template.subject,
+            html: template.html
+          });
+        } catch (e) {
+          logger.error('Email send error (new shift to employee)', { error: e, email: emp.email });
+        }
+      }));
+    }
+
+    // Respond only after notifications
     res.status(201).json({
-      message: 'Shift request created successfully.',
+      message: 'Shift request created successfully',
       shift: {
         ...createdShift[0],
         qualificationname, // keep variable name for frontend
@@ -1430,46 +1514,7 @@ exports.createClientShiftRequest = async (req, res) => {
     logger.error('Create shift request error', { error: err, sql: err.sql || undefined });
     res.status(500).json({ message: 'Failed to create shift request.', error: err.message, sql: err.sql || undefined });
   }
-
-  // ================== send notifications to employees ==================
-  // Fetch all Employee - Standard User users' emails
-  const [employeeRows] = await dbConn.query(`
-    SELECT u.email, u.fullname
-    FROM Users u
-    LEFT JOIN Assignedusertypes au ON au.Userid = u.id
-    LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-    WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
-  `);
-  if (employeeRows && employeeRows.length) {
-    const shift = createdShift[0];
-    const locationName = shift.LocationName || '';
-    const clientName = shift.clientname || '';
-    const shiftDate = shift.Shiftdate;
-    const startTime = shift.Starttime;
-    const endTime = shift.Endtime;
-    for (const emp of employeeRows) {
-      const template = {
-        subject: `New Shift Available: ${locationName} on ${shiftDate}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; color: #222;">
-            <h2 style="color: #1976d2;">New Shift Available</h2>
-            <p>Dear <b>${emp.fullname || 'Employee'}</b>,</p>
-            <p>A new shift has been raised at <b>${locationName}</b> for <b>${clientName}</b> on <b>${shiftDate}</b>.<br/>
-            <b>Time:</b> ${startTime} - ${endTime}<br/>
-            <b>Required Qualifications:</b> ${(qualificationname || []).join(', ')}</p>
-            <p>Please log in to your portal to view and accept the shift if you are available.</p>
-            <hr style="border:none; border-top:1px solid #eee; margin:24px 0;"/>
-            <p style="font-size: 12px; color: #888;">This is an automated message from GConsole HRM. Please do not reply to this email.</p>
-          </div>
-        `
-      };
-      sendMail({
-        to: emp.email,
-        subject: template.subject,
-        html: template.html
-      }).catch(e => logger.error('Email send error (new shift to employee)', { error: e, email: emp.email }));
-    }
-  }
 };
+// ================== end createClientShiftRequest ==================
 
 
