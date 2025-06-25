@@ -13,7 +13,8 @@ const {
   authorizeManager, 
   authorizeClient, 
   authorizeStaffOrAdmin, 
-  authorizeAdmin 
+  authorizeAdmin, 
+  authorizeClientOrStaffOrAdmin 
 } = require('../middleware/authMiddleware');
 
 // Sanity check for middleware imports
