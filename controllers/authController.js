@@ -18,6 +18,19 @@ const logger = winston.createLogger({
   ],
 });
 
+// Date formatting helpers for shift endpoints
+function formatDate(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  return d.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function formatDateTime(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  return d.toISOString().replace('T', ' ').substring(0, 16); // YYYY-MM-DD HH:mm
+}
+
 // ================== login ==================
 // Authenticates a user and returns a JWT token if credentials are valid.
 exports.login = async (req, res, next) => {
@@ -354,7 +367,7 @@ exports.createClientShiftRequest = async (req, res) => {
     shiftdate,
     starttime,
     endtime,
-    qualificationid,
+    qualificationgroupid, // NEW: use group instead of qualificationid
     totalrequiredstaffnumber,
     additionalvalue
   } = req.body;
@@ -386,21 +399,21 @@ exports.createClientShiftRequest = async (req, res) => {
     }
     // Staff - Standard User and System Admin can raise for any location (no restriction)
 
-    // Validate qualification
-    const [qualRows] = await dbConn.query(
-      'SELECT 1 FROM Lookups WHERE id = ? AND Typeid = (SELECT ID FROM Lookuptypes WHERE Name = \'Qualification\')',
-      [qualificationid]
+    // Validate qualification group
+    const [qualGroupRows] = await dbConn.query(
+      'SELECT 1 FROM Qualificationgroups WHERE id = ?',
+      [qualificationgroupid]
     );
-    if (!qualRows.length) {
-      return res.status(400).json({ message: 'Invalid qualification.' });
+    if (!qualGroupRows.length) {
+      return res.status(400).json({ message: 'Invalid qualification group.' });
     }
 
     // Insert into Clientshiftrequests
     const [result] = await dbConn.query(
       `INSERT INTO Clientshiftrequests
-        (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
+        (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid]
+      [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid]
     );
     const clientshiftrequestid = result.insertId;
 
@@ -428,10 +441,24 @@ exports.createClientShiftRequest = async (req, res) => {
     // Return the created shift request and staff shifts
     const [createdShift] = await dbConn.query('SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.id WHERE csr.id = ?', [clientshiftrequestid]);
     const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
+
+    // Fetch qualifications for the group and return as qualificationname (array of names)
+    const [qualRows] = await dbConn.query(
+      `SELECT q.Name, q.Additionalvalue
+       FROM Qualificationgroupitems qgi
+       JOIN Qualifications q ON qgi.Qualificationid = q.ID
+       WHERE qgi.Qualificationgroupid = ?`,
+      [qualificationgroupid]
+    );
+    const qualificationname = qualRows.map(q => q.Name);
+
     res.status(201).json({
       message: 'Shift request created successfully.',
-      shift: createdShift[0],
-      staffShifts: createdStaffShifts
+      shift: {
+        ...createdShift[0],
+        qualificationname, // keep variable name for frontend
+        StaffShifts: createdStaffShifts
+      }
     });
   } catch (err) {
     logger.error('Create shift request error', { error: err });
@@ -664,12 +691,10 @@ exports.getAvailableClientShifts = async (req, res) => {
       // Admin/Staff: See all shifts for all hospitals/locations
       [rows] = await db.query(`
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
-               csr.Totalrequiredstaffnumber
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
-        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
         WHERE csr.deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
@@ -693,12 +718,29 @@ exports.getAvailableClientShifts = async (req, res) => {
         if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
         staffShiftsByRequest[s.Clientshiftrequestid].push(s);
       });
+      // Fetch qualifications for all qualificationgroupids
+      const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+      let qualMap = {};
+      if (groupIds.length) {
+        const [qualRows] = await db.query(
+          `SELECT qgi.Qualificationgroupid, q.Name
+           FROM Qualificationgroupitems qgi
+           JOIN Qualifications q ON qgi.Qualificationid = q.ID
+           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+          groupIds
+        );
+        qualMap = groupIds.reduce((acc, gid) => {
+          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+          return acc;
+        }, {});
+      }
       // Format output
       const formatted = rows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime),
+        qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
         StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
@@ -719,12 +761,10 @@ exports.getAvailableClientShifts = async (req, res) => {
       total = countResult[0]?.total || 0;
       const shiftQuery = `
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
-               csr.Totalrequiredstaffnumber
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
-        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
         ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})` : 'WHERE csr.deletedat IS NULL'}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
@@ -750,12 +790,29 @@ exports.getAvailableClientShifts = async (req, res) => {
         if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
         staffShiftsByRequest[s.Clientshiftrequestid].push(s);
       });
+      // Fetch qualifications for all qualificationgroupids
+      const groupIds = [...new Set(shiftRows.map(r => r.Qualificationgroupid).filter(Boolean))];
+      let qualMap = {};
+      if (groupIds.length) {
+        const [qualRows] = await db.query(
+          `SELECT qgi.Qualificationgroupid, q.Name
+           FROM Qualificationgroupitems qgi
+           JOIN Qualifications q ON qgi.Qualificationid = q.ID
+           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+          groupIds
+        );
+        qualMap = groupIds.reduce((acc, gid) => {
+          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+          return acc;
+        }, {});
+      }
       // Format output
       const formatted = shiftRows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime),
+        qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
         StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
@@ -766,22 +823,38 @@ exports.getAvailableClientShifts = async (req, res) => {
       // Employee: See only open shift slots that are not soft-deleted
       [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationid, l.Name AS qualificationname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
                cl.LocationName, cl.LocationAddress, c.Name AS clientname
         FROM Clientstaffshifts css
         LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
-        LEFT JOIN Lookups l ON csr.Qualificationid = l.ID
         WHERE css.Status = 'open' AND css.Deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
+      // Fetch qualifications for all qualificationgroupids
+      const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+      let qualMap = {};
+      if (groupIds.length) {
+        const [qualRows] = await db.query(
+          `SELECT qgi.Qualificationgroupid, q.Name
+           FROM Qualificationgroupitems qgi
+           JOIN Qualifications q ON qgi.Qualificationid = q.ID
+           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+          groupIds
+        );
+        qualMap = groupIds.reduce((acc, gid) => {
+          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+          return acc;
+        }, {});
+      }
       const formatted = rows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime)
+        Endtime: formatDateTime(row.Endtime),
+        qualificationname: qualMap[row.Qualificationgroupid] || [] // keep variable name
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType) {
@@ -792,8 +865,19 @@ exports.getAvailableClientShifts = async (req, res) => {
       return res.status(401).json({ message: 'Unauthorized: No user type', code: 'UNAUTHORIZED' });
     }
   } catch (err) {
-    logger.error('Get available client shifts error', { error: err });
-    res.status(500).json({ message: 'Error fetching available shifts', error: err });
+    // Improved error logging for debugging
+    logger.error('Get available client shifts error', {
+      message: err.message,
+      stack: err.stack,
+      error: err
+    });
+    // Return full error details for debugging (remove in production)
+    res.status(500).json({
+      message: 'Error fetching available shifts',
+      error: err.message,
+      stack: err.stack,
+      raw: err
+    });
   }
 };
 // ================== end getAvailableClientShifts ==================
@@ -1182,7 +1266,7 @@ exports.updateClientShiftRequest = async (req, res) => {
       return res.status(400).json({ message: 'Cannot edit shift: already started or not in editable state.' });
     }
     // Build update fields
-    const allowedFields = ['clientlocationid', 'shiftdate', 'starttime', 'endtime', 'qualificationid', 'totalrequiredstaffnumber', 'additionalvalue'];
+    const allowedFields = ['clientlocationid', 'shiftdate', 'starttime', 'endtime', 'qualificationgroupid', 'totalrequiredstaffnumber', 'additionalvalue'];
     const updates = [];
     const params = [];
     for (const field of allowedFields) {
@@ -1202,7 +1286,16 @@ exports.updateClientShiftRequest = async (req, res) => {
     await dbConn.query(`UPDATE Clientshiftrequests SET ${updates.join(', ')} WHERE id = ?`, params);
     // Return updated shift
     const [updatedRows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [shiftId]);
-    res.status(200).json({ message: 'Shift request updated successfully.', shift: updatedRows[0] });
+    // Fetch qualifications for the group and return as qualificationname (array of names)
+    let qualificationname = [];
+    if (updatedRows[0]?.Qualificationgroupid) {
+      const [qualRows] = await dbConn.query(
+        `SELECT q.Name FROM Qualificationgroupitems qgi JOIN Qualifications q ON qgi.Qualificationid = q.ID WHERE qgi.Qualificationgroupid = ?`,
+        [updatedRows[0].Qualificationgroupid]
+      );
+      qualificationname = qualRows.map(q => q.Name);
+    }
+    res.status(200).json({ message: 'Shift request updated successfully.', shift: { ...updatedRows[0], qualificationname } });
   } catch (err) {
     logger.error('Update shift request error', { error: err });
     res.status(500).json({ message: 'Failed to update shift request.', error: err.message });
