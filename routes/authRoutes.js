@@ -87,6 +87,9 @@ router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, authCon
 // Admin staff: Get all client locations linked to a client user by email address
 router.get('/client-user-locations', authenticate, authorizeStaffOrAdmin, authController.getClientUserLocationsByEmail);
 
+// Admin staff: Unlink a client user from a client by email and clientid
+router.post('/unlink-client-user', authenticate, authorizeStaffOrAdmin, authController.unlinkClientUserFromClient);
+
 // Soft-delete a person (People table) by setting deletedat and deletedbyid
 router.delete('/People/:id', authenticate, authController.softDeletePerson);
 

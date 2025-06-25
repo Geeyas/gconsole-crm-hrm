@@ -1112,4 +1112,49 @@ exports.getClientUserLocationsByEmail = async (req, res) => {
 };
 // ================== end getClientUserLocationsByEmail ==================
 
+// ================== unlinkClientUserFromClient ==================
+// Admin staff: Unlink a client user from a client by email and clientid.
+exports.unlinkClientUserFromClient = async (req, res) => {
+  const requesterType = req.user?.usertype;
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
+  }
+  const { emailaddress, clientid } = req.body;
+  if (!emailaddress || !clientid) {
+    return res.status(400).json({ message: 'Missing emailaddress or clientid in request body.' });
+  }
+  try {
+    // Find the user by email and check usertype
+    const [userRows] = await db.query(
+      `SELECT u.id, ut.Name as usertype
+       FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.email = ?`, [emailaddress]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+    // Check if the link exists
+    const [linkRows] = await db.query(
+      'SELECT * FROM Userclients WHERE userid = ? AND clientid = ?',
+      [user.id, clientid]
+    );
+    if (!linkRows.length) {
+      return res.status(404).json({ message: 'User is not linked to this client.' });
+    }
+    // Delete the link
+    await db.query('DELETE FROM Userclients WHERE userid = ? AND clientid = ?', [user.id, clientid]);
+    res.status(200).json({ message: 'User unlinked from client successfully.' });
+  } catch (err) {
+    logger.error('Unlink client user from client error', { error: err });
+    res.status(500).json({ message: 'Error unlinking client user from client', error: err });
+  }
+};
+// ================== end unlinkClientUserFromClient ==================
+
 

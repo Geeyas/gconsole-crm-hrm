@@ -711,6 +711,65 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
       403: { message: 'Access denied: Only staff or admin can use this endpoint.' },
       404: { message: 'User not found with the provided email address.' }
     }
+  },
+  {
+    method: 'POST',
+    path: '/api/unlink-client-user',
+    description: 'Admin staff: Unlink a client user from a client by email and clientid.',
+    bodyParams: ['emailaddress (required)', 'clientid (required)'],
+    userType: ['Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Only accessible by Staff - Standard User or System Admin.',
+      '- Pass the client user\'s email address and the clientid in the JSON body.',
+      '- The user must exist and be a Client - Standard User.',
+      '- The user must be currently linked to the client.',
+      '- On success, the user is unlinked from the client.',
+      '- Returns a clear error if the user is not found, not a Client - Standard User, or not linked to the client.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**How to use this API:**',
+      '──────────────────────────────────────────────────────────────',
+      '1. Log in as Staff - Standard User or System Admin and get the JWT token.',
+      '2. Make a POST request to /api/unlink-client-user with the following JSON body:',
+      '   {',
+      '     "emailaddress": "clientuser@example.com",',
+      '     "clientid": 1',
+      '   }',
+      '3. Include the JWT token in the Authorization header.',
+      '4. On success, you will receive a confirmation message.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X POST https://your-api-domain/api/unlink-client-user \\',
+      '  -H "Authorization: Bearer <JWT token>" \\',
+      '  -H "Content-Type: application/json" \\',
+      '  -d \'{"emailaddress": "clientuser@example.com", "clientid": 1}\'',
+      '──────────────────────────────────────────────────────────────',
+    ].join('\n'),
+    example: {
+      request: {
+        headers: {
+          'Authorization': 'Bearer <JWT token for Staff - Standard User or System Admin>',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          emailaddress: 'clientuser@example.com',
+          clientid: 1
+        }
+      },
+      responses: {
+        200: { message: 'User unlinked from client successfully.' },
+        400: { message: 'Target user is not a Client - Standard User.' },
+        403: { message: 'Access denied: Only staff or admin can use this endpoint.' },
+        404: { message: 'User not found with the provided email address.' },
+        404.1: { message: 'User is not linked to this client.' }
+      }
+    }
   }
 ];
 
