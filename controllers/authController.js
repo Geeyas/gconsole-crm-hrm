@@ -377,22 +377,20 @@ exports.createClientShiftRequest = async (req, res) => {
   const userType = req.user?.usertype;
 
   try {
-    // Get clientid from Clientlocations
-    const [locationRows] = await dbConn.query(
-      'SELECT clientid FROM Clientlocations WHERE id = ?',
-      [clientlocationid]
-    );
+    // Get Clientid from Clientlocations (case sensitive)
+    const locationSql = 'SELECT Clientid FROM Clientlocations WHERE ID = ?';
+    console.log('[DEBUG] Query:', locationSql, [clientlocationid]);
+    const [locationRows] = await dbConn.query(locationSql, [clientlocationid]);
     if (!locationRows.length) {
       return res.status(400).json({ message: 'Invalid client location.' });
     }
-    const clientid = locationRows[0].clientid;
+    const clientid = locationRows[0].Clientid;
 
     // ENFORCE: Client users can only raise shifts for their assigned locations
     if (userType === 'Client - Standard User') {
-      const [userClientRows] = await dbConn.query(
-        'SELECT 1 FROM Userclients WHERE userid = ? AND clientid = ?',
-        [createdbyid, clientid]
-      );
+      const userClientSql = 'SELECT 1 FROM Userclients WHERE Userid = ? AND Clientid = ?';
+      console.log('[DEBUG] Query:', userClientSql, [createdbyid, clientid]);
+      const [userClientRows] = await dbConn.query(userClientSql, [createdbyid, clientid]);
       if (!userClientRows.length) {
         return res.status(403).json({ message: 'Access denied: You are not authorized for this client/location.' });
       }
@@ -400,24 +398,23 @@ exports.createClientShiftRequest = async (req, res) => {
     // Staff - Standard User and System Admin can raise for any location (no restriction)
 
     // Validate qualification group
-    const [qualGroupRows] = await dbConn.query(
-      'SELECT 1 FROM Qualificationgroups WHERE id = ?',
-      [qualificationgroupid]
-    );
+    const qualGroupSql = 'SELECT 1 FROM Qualificationgroups WHERE ID = ?';
+    console.log('[DEBUG] Query:', qualGroupSql, [qualificationgroupid]);
+    const [qualGroupRows] = await dbConn.query(qualGroupSql, [qualificationgroupid]);
     if (!qualGroupRows.length) {
       return res.status(400).json({ message: 'Invalid qualification group.' });
     }
 
-    // Insert into Clientshiftrequests
-    const [result] = await dbConn.query(
-      `INSERT INTO Clientshiftrequests
-        (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid]
-    );
+    // Insert into Clientshiftrequests (case sensitive columns)
+    const insertShiftSql = `INSERT INTO Clientshiftrequests
+      (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const insertShiftParams = [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid];
+    console.log('[DEBUG] Query:', insertShiftSql, insertShiftParams);
+    const [result] = await dbConn.query(insertShiftSql, insertShiftParams);
     const clientshiftrequestid = result.insertId;
 
-    // Insert into Clientstaffshifts (one row per required staff)
+    // Insert into Clientstaffshifts (one row per required staff, case sensitive columns)
     const staffShiftInserts = [];
     for (let i = 1; i <= totalrequiredstaffnumber; i++) {
       staffShiftInserts.push([
@@ -432,24 +429,35 @@ exports.createClientShiftRequest = async (req, res) => {
       ]);
     }
     if (staffShiftInserts.length) {
-      await dbConn.query(
-        'INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, `Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ?',
-        [staffShiftInserts]
-      );
+      try {
+        // Build placeholders for bulk insert
+        const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const flatValues = staffShiftInserts.flat();
+        const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
+          '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
+        console.log('[DEBUG] Query:', staffShiftSql, flatValues);
+        await dbConn.query(staffShiftSql, flatValues);
+      } catch (err) {
+        logger.error('Error inserting into Clientstaffshifts', { error: err, attemptedSql: 'bulk insert', values: staffShiftInserts });
+        return res.status(500).json({ message: 'Failed to insert staff shifts.', error: err.message });
+      }
     }
 
     // Return the created shift request and staff shifts
-    const [createdShift] = await dbConn.query('SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.id WHERE csr.id = ?', [clientshiftrequestid]);
-    const [createdStaffShifts] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [clientshiftrequestid]);
+    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID WHERE csr.ID = ?';
+    console.log('[DEBUG] Query:', fetchShiftSql, [clientshiftrequestid]);
+    const [createdShift] = await dbConn.query(fetchShiftSql, [clientshiftrequestid]);
+    const fetchStaffShiftsSql = 'SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?';
+    console.log('[DEBUG] Query:', fetchStaffShiftsSql, [clientshiftrequestid]);
+    const [createdStaffShifts] = await dbConn.query(fetchStaffShiftsSql, [clientshiftrequestid]);
 
     // Fetch qualifications for the group and return as qualificationname (array of names)
-    const [qualRows] = await dbConn.query(
-      `SELECT q.Name, q.Additionalvalue
-       FROM Qualificationgroupitems qgi
-       JOIN Qualifications q ON qgi.Qualificationid = q.ID
-       WHERE qgi.Qualificationgroupid = ?`,
-      [qualificationgroupid]
-    );
+    const qualNamesSql = `SELECT q.Name, q.Additionalvalue
+     FROM Qualificationgroupitems qgi
+     JOIN Qualifications q ON qgi.Qualificationid = q.ID
+     WHERE qgi.Qualificationgroupid = ?`;
+    console.log('[DEBUG] Query:', qualNamesSql, [qualificationgroupid]);
+    const [qualRows] = await dbConn.query(qualNamesSql, [qualificationgroupid]);
     const qualificationname = qualRows.map(q => q.Name);
 
     res.status(201).json({
@@ -461,8 +469,8 @@ exports.createClientShiftRequest = async (req, res) => {
       }
     });
   } catch (err) {
-    logger.error('Create shift request error', { error: err });
-    res.status(500).json({ message: 'Failed to create shift request.', error: err.message });
+    logger.error('Create shift request error', { error: err, sql: err.sql || undefined });
+    res.status(500).json({ message: 'Failed to create shift request.', error: err.message, sql: err.sql || undefined });
   }
 };
 // ================== end createClientShiftRequest ==================
@@ -1336,5 +1344,20 @@ exports.deleteClientShiftRequest = async (req, res) => {
   }
 };
 // ================== end deleteClientShiftRequest ==================
+
+// TEMP DEBUG: Log all table names at server startup
+(async () => {
+  try {
+    const [results] = await db.query('SHOW TABLES');
+    console.log('=== DATABASE TABLES (case-sensitive) ===');
+    results.forEach(row => {
+      const tableName = Object.values(row)[0];
+      console.log('Table:', tableName);
+    });
+    console.log('========================================');
+  } catch (err) {
+    console.error('Error fetching table names for debug:', err);
+  }
+})();
 
 

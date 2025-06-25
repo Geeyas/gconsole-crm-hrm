@@ -36,9 +36,9 @@ const createShiftValidation = [
       }
       return true;
     }),
-  body('qualificationid')
-    .notEmpty().withMessage('qualificationid is required')
-    .isInt({ min: 1 }).withMessage('qualificationid must be a positive integer'),
+  body('qualificationgroupid')
+    .notEmpty().withMessage('qualificationgroupid is required')
+    .isInt({ min: 1 }).withMessage('qualificationgroupid must be a positive integer'),
   body('totalrequiredstaffnumber')
     .notEmpty().withMessage('totalrequiredstaffnumber is required')
     .isInt({ min: 1 }).withMessage('totalrequiredstaffnumber must be a positive integer'),
