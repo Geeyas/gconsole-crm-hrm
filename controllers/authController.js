@@ -509,8 +509,8 @@ exports.linkClientUserToLocation = async (req, res) => {
 exports.getMyClientLocations = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
-  if (userType !== 'Client - Standard User' && userType !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Clients only' });
+  if (userType !== 'Client - Standard User' && userType !== 'System Admin' && userType !== 'Staff - Standard User') {
+    return res.status(403).json({ message: 'Access denied: Clients, staff, or admin only' });
   }
   try {
     // Get all clientids for this user from Userclients

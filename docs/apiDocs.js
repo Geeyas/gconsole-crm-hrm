@@ -225,9 +225,9 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
   {
     method: 'GET',
     path: '/api/my-client-locations',
-    description: 'Client: View only the locations assigned to the logged-in client user. Returns all Clientlocations for the client(s) this user is linked to via Userclients, grouped by client.',
-    userType: ['Client - Standard User', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Client - Standard User or System Admin)'],
+    description: 'View all clients and their locations assigned to the logged-in user. Accessible by Client - Standard User, System Admin, Staff - Standard User.',
+    userType: ['Client - Standard User', 'System Admin', 'Staff - Standard User'],
+    headers: ['Authorization: Bearer <JWT token> (Client - Standard User, System Admin, or Staff - Standard User)'],
     NOTE: `
 ──────────────────────────────────────────────────────────────
 **How this API works (Client-centric model):**
@@ -235,11 +235,12 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
 - Returns all clients the user is linked to (via Userclients), each with an array of their locations (from Clientlocations).
 - If the user is not linked to any client, an empty array is returned.
 - The response is grouped by client, with each client object containing an array of their locations.
+- **NEW:** Staff - Standard User can now use this endpoint to view all clients and locations they are linked to (if any).
 
 ──────────────────────────────────────────────────────────────
 **How to use this API:**
 ──────────────────────────────────────────────────────────────
-1. Log in as a Client - Standard User or System Admin and get the JWT token.
+1. Log in as a Client - Standard User, System Admin, or Staff - Standard User and get the JWT token.
 2. Make a GET request to /api/my-client-locations.
 3. Include the JWT token in the Authorization header.
 4. The response will be a list of assigned clients, each with their locations.
@@ -269,14 +270,14 @@ curl -X GET https://your-api-domain/api/my-client-locations \
                   id: 9,
                   clientid: 3,
                   locationname: 'Main Campus',
-                  locationaddress: '123 Main St',
+                  locationaddress: '123 Main St'
                   // ...other fields from Clientlocations...
                 },
                 {
                   id: 10,
                   clientid: 3,
                   locationname: 'West Wing',
-                  locationaddress: '456 West St',
+                  locationaddress: '456 West St'
                   // ...other fields from Clientlocations...
                 }
                 // ...more locations for this client...
@@ -288,7 +289,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
       },
       403: 'Access denied'
     },
-    NOTE: 'This endpoint returns all clients the user is linked to, each with an array of their locations. If the user is not linked to any client, an empty array is returned. The response is grouped by client.'
+    NOTE: 'This endpoint returns all clients the user is linked to, each with an array of their locations. If the user is not linked to any client, an empty array is returned. The response is grouped by client. Staff - Standard User can now use this endpoint.'
   },
   {
     method: 'POST',
