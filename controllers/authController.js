@@ -726,10 +726,12 @@ exports.getAvailableClientShifts = async (req, res) => {
       // Admin/Staff: See all shifts for all hospitals/locations
       [rows] = await db.query(`
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
         WHERE csr.deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
@@ -796,10 +798,12 @@ exports.getAvailableClientShifts = async (req, res) => {
       total = countResult[0]?.total || 0;
       const shiftQuery = `
         SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
         ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})` : 'WHERE csr.deletedat IS NULL'}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
