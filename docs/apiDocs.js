@@ -428,7 +428,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
   {
     method: 'DELETE',
     path: '/api/clientshiftrequests/:id',
-    description: 'Delete (soft-delete) a client shift request. Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can delete. Cannot delete if the shift has already started or is not in a deletable state.',
+    description: 'Delete (soft-delete) a client shift request. Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can delete. Cannot delete if the shift has already started or is not in a deletable state. When a shift is deleted, all related staff shift slots in Clientstaffshifts are also soft-deleted (Deletedat and Deletedbyid are set).',
     urlParams: ['id (Clientshiftrequests table ID)'],
     headers: ['Authorization: Bearer <JWT token> (required)'],
     example: {
@@ -440,7 +440,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
         }
       },
       responses: {
-        200: { message: 'Shift request deleted successfully.' },
+        200: { message: 'Shift request and all related staff shift slots deleted successfully.' },
         400: { message: 'Cannot delete shift: already started or not in deletable state.' },
         403: { message: 'Access denied: Only the creator or staff/admin can delete this shift.' },
         404: { message: 'Shift request not found.' }
@@ -452,7 +452,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
       '──────────────────────────────────────────────────────────────',
       '- Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can delete.',
       '- Cannot delete if the shift has already started or is not in a deletable state.',
-      '- This is a soft-delete: sets Deletedat and Deletedbyid if present in the table.',
+      '- This is a soft-delete: sets Deletedat and Deletedbyid in both Clientshiftrequests and all related Clientstaffshifts.',
       '- Returns a confirmation message on success.',
       '',
       '──────────────────────────────────────────────────────────────',

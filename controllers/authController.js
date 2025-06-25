@@ -1436,9 +1436,11 @@ exports.deleteClientShiftRequest = async (req, res) => {
     if (shiftStart <= now) {
       return res.status(400).json({ message: 'Cannot delete shift: already started or not in deletable state.' });
     }
-    // Soft-delete: set Deletedat and Deletedbyid
+    // Soft-delete: set Deletedat and Deletedbyid on the main shift request
     await dbConn.query('UPDATE Clientshiftrequests SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, shiftId]);
-    res.status(200).json({ message: 'Shift request deleted successfully.' });
+    // Soft-delete all related staff shift slots
+    await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE Clientshiftrequestid = ? AND Deletedat IS NULL', [now, userId, shiftId]);
+    res.status(200).json({ message: 'Shift request and all related staff shift slots deleted successfully.' });
   } catch (err) {
     logger.error('Delete shift request error', { error: err });
     res.status(500).json({ message: 'Failed to delete shift request.', error: err.message });
