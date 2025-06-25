@@ -571,7 +571,7 @@ exports.linkClientUserToLocation = async (req, res) => {
 // ================== end linkClientUserToLocation ==================
 
 // ================== getMyClientLocations ==================
-// Returns all client locations assigned to the logged-in client user.
+// Returns all client locations assigned to the logged-in client user, or all locations for staff/admin.
 exports.getMyClientLocations = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
@@ -579,40 +579,66 @@ exports.getMyClientLocations = async (req, res) => {
     return res.status(403).json({ message: 'Access denied: Clients, staff, or admin only' });
   }
   try {
-    // Get all clientids for this user from Userclients
-    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-    if (!clientRows.length) {
-      return res.status(200).json({ locations: [] });
+    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      // Return ALL client locations, grouped by client
+      const [locations] = await db.query(
+        `SELECT cl.*, c.Name as clientname
+         FROM Clientlocations cl
+         LEFT JOIN Clients c ON cl.clientid = c.id`
+      );
+      // Group by client
+      const clientsMap = {};
+      locations.forEach(loc => {
+        if (!clientsMap[loc.clientid]) {
+          clientsMap[loc.clientid] = {
+            id: loc.clientid,
+            name: loc.clientname,
+            locations: []
+          };
+        }
+        clientsMap[loc.clientid].locations.push({
+          id: loc.ID,
+          clientid: loc.clientid,
+          locationname: loc.LocationName,
+          locationaddress: loc.LocationAddress || '',
+        });
+      });
+      return res.status(200).json({ clients: Object.values(clientsMap) });
+    } else {
+      // Client - Standard User: only their linked client locations
+      // Get all clientids for this user from Userclients
+      const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
+      if (!clientRows.length) {
+        return res.status(200).json({ clients: [] });
+      }
+      const clientIds = clientRows.map(row => row.clientid);
+      // Get all locations for these clientids, join with client info
+      const [locations] = await db.query(
+        `SELECT cl.*, c.Name as clientname
+         FROM Clientlocations cl
+         LEFT JOIN Clients c ON cl.clientid = c.id
+         WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')})`,
+        clientIds
+      );
+      // Group by client
+      const clientsMap = {};
+      locations.forEach(loc => {
+        if (!clientsMap[loc.clientid]) {
+          clientsMap[loc.clientid] = {
+            id: loc.clientid,
+            name: loc.clientname,
+            locations: []
+          };
+        }
+        clientsMap[loc.clientid].locations.push({
+          id: loc.ID,
+          clientid: loc.clientid,
+          locationname: loc.LocationName,
+          locationaddress: loc.LocationAddress || '',
+        });
+      });
+      return res.status(200).json({ clients: Object.values(clientsMap) });
     }
-    const clientIds = clientRows.map(row => row.clientid);
-    // Get all locations for these clientids, join with client info
-    const [locations] = await db.query(
-      `SELECT cl.*, c.Name as clientname
-       FROM Clientlocations cl
-       LEFT JOIN Clients c ON cl.clientid = c.id
-       WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')})`,
-      clientIds
-    );
-    // Get user details (email, firstname, lastname) for the current user
-    const [userDetails] = await db.query(
-      `SELECT u.email, p.Firstname, p.Lastname
-       FROM Users u
-       LEFT JOIN People p ON u.id = p.Linkeduserid
-       WHERE u.id = ?`,
-      [userId]
-    );
-    const userInfo = userDetails[0] || {};
-    // Attach user info to each location for clarity
-    const result = locations.map(loc => ({
-      ID: loc.ID,
-      LocationName: loc.LocationName, // Use the correct field from Clientlocations
-      clientid: loc.clientid,
-      clientname: loc.clientname,
-      useremail: userInfo.email,
-      userfirstname: userInfo.Firstname,
-      userlastname: userInfo.Lastname
-    }));
-    res.status(200).json({ locations: result });
   } catch (err) {
     logger.error('Get my client locations error', { error: err });
     res.status(500).json({ message: 'Error fetching client locations', error: err });
@@ -1304,10 +1330,13 @@ exports.updateClientShiftRequest = async (req, res) => {
     const allowedFields = ['clientlocationid', 'shiftdate', 'starttime', 'endtime', 'qualificationgroupid', 'totalrequiredstaffnumber', 'additionalvalue'];
     const updates = [];
     const params = [];
+    let newTotalRequired = undefined;
+    let oldTotalRequired = shift.Totalrequiredstaffnumber;
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updates.push(`${field.charAt(0).toUpperCase() + field.slice(1) } = ?`);
         params.push(req.body[field]);
+        if (field === 'totalrequiredstaffnumber') newTotalRequired = req.body[field];
       }
     }
     if (!updates.length) {
@@ -1319,6 +1348,51 @@ exports.updateClientShiftRequest = async (req, res) => {
     params.push(now, userId);
     params.push(shiftId);
     await dbConn.query(`UPDATE Clientshiftrequests SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    // ================== STAFF SHIFT SLOT ADJUSTMENT ==================
+    if (newTotalRequired !== undefined && newTotalRequired !== oldTotalRequired) {
+      // Fetch all staff shift slots for this request, ordered by `Order`
+      const [slots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Deletedat IS NULL ORDER BY `Order`', [shiftId]);
+      const currentCount = slots.length;
+      if (newTotalRequired > currentCount) {
+        // Add new slots
+        const toAdd = newTotalRequired - currentCount;
+        const staffShiftInserts = [];
+        for (let i = currentCount + 1; i <= newTotalRequired; i++) {
+          staffShiftInserts.push([
+            shiftId,
+            shift.Clientid,
+            i,
+            'open', // Status
+            now,
+            userId,
+            now,
+            userId
+          ]);
+        }
+        if (staffShiftInserts.length) {
+          const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+          const flatValues = staffShiftInserts.flat();
+          const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
+            '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
+          await dbConn.query(staffShiftSql, flatValues);
+        }
+      } else if (newTotalRequired < currentCount) {
+        // Remove (soft-delete) unassigned slots, starting from the highest order
+        let toRemove = currentCount - newTotalRequired;
+        // Only remove slots that are not assigned/accepted
+        for (let i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
+          const slot = slots[i];
+          if (!slot.Assignedtouserid && slot.Status === 'open') {
+            await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.id]);
+            toRemove--;
+          }
+        }
+        // If not enough unassigned slots, the rest remain (data integrity)
+      }
+    }
+    // ================== END STAFF SHIFT SLOT ADJUSTMENT ==================
+
     // Return updated shift
     const [updatedRows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [shiftId]);
     // Fetch qualifications for the group and return as qualificationname (array of names)
@@ -1372,153 +1446,56 @@ exports.deleteClientShiftRequest = async (req, res) => {
 };
 // ================== end deleteClientShiftRequest ==================
 
-exports.createClientShiftRequest = async (req, res) => {
-  const dbConn = db;
-  const {
-    clientlocationid,
-    shiftdate,
-    starttime,
-    endtime,
-    qualificationgroupid, // NEW: use group instead of qualificationid
-    totalrequiredstaffnumber,
-    additionalvalue
-  } = req.body;
-  const createdbyid = req.user?.id || req.body.createdbyid;
-  const updatedbyid = createdbyid;
-  const now = new Date();
+// ================== getMyShifts ==================
+// Returns all shifts accepted or assigned to the logged-in employee (pending approval or approved)
+exports.getMyShifts = async (req, res) => {
+  const userId = req.user?.id;
   const userType = req.user?.usertype;
-
+  if (userType !== 'Employee - Standard User') {
+    return res.status(403).json({ message: 'Access denied: Employees only' });
+  }
   try {
-    // Get Clientid from Clientlocations (case sensitive)
-    const locationSql = 'SELECT Clientid FROM Clientlocations WHERE ID = ?';
-    const [locationRows] = await dbConn.query(locationSql, [clientlocationid]);
-    if (!locationRows.length) {
-      return res.status(400).json({ message: 'Invalid client location.' });
+    // Get all staff shifts assigned to this user, status pending approval or approved
+    const [rows] = await db.query(`
+      SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
+             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
+             cl.LocationName, cl.LocationAddress, c.Name AS clientname
+      FROM Clientstaffshifts css
+      LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      WHERE css.Assignedtouserid = ? AND css.Status IN ('pending approval', 'approved') AND css.Deletedat IS NULL
+      ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+    `, [userId]);
+    // Fetch qualifications for all qualificationgroupids
+    const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+    let qualMap = {};
+    if (groupIds.length) {
+      const [qualRows] = await db.query(
+        `SELECT qgi.Qualificationgroupid, q.Name
+         FROM Qualificationgroupitems qgi
+         JOIN Qualifications q ON qgi.Qualificationid = q.ID
+         WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+        groupIds
+      );
+      qualMap = groupIds.reduce((acc, gid) => {
+        acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+        return acc;
+      }, {});
     }
-    const clientid = locationRows[0].Clientid;
-
-    // ENFORCE: Client users can only raise shifts for their assigned locations
-    if (userType === 'Client - Standard User') {
-      const userClientSql = 'SELECT 1 FROM Userclients WHERE Userid = ? AND Clientid = ?';
-      const [userClientRows] = await dbConn.query(userClientSql, [createdbyid, clientid]);
-      if (!userClientRows.length) {
-        return res.status(403).json({ message: 'Access denied: You are not authorized for this client/location.' });
-      }
-    }
-    // Staff - Standard User and System Admin can raise for any location (no restriction)
-
-    // Validate qualification group
-    const qualGroupSql = 'SELECT 1 FROM Qualificationgroups WHERE ID = ?';
-    const [qualGroupRows] = await dbConn.query(qualGroupSql, [qualificationgroupid]);
-    if (!qualGroupRows.length) {
-      return res.status(400).json({ message: 'Invalid qualification group.' });
-    }
-
-    // Insert into Clientshiftrequests (case sensitive columns)
-    const insertShiftSql = `INSERT INTO Clientshiftrequests
-      (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const insertShiftParams = [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid];
-    const [result] = await dbConn.query(insertShiftSql, insertShiftParams);
-    const clientshiftrequestid = result.insertId;
-
-    // Insert into Clientstaffshifts (one row per required staff, case sensitive columns)
-    const staffShiftInserts = [];
-    for (let i = 1; i <= totalrequiredstaffnumber; i++) {
-      staffShiftInserts.push([
-        clientshiftrequestid,
-        clientid,
-        i,
-        'open', // Status
-        now,
-        createdbyid,
-        now,
-        updatedbyid
-      ]);
-    }
-    if (staffShiftInserts.length) {
-      try {
-        // Build placeholders for bulk insert
-        const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-        const flatValues = staffShiftInserts.flat();
-        const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
-          '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
-        await dbConn.query(staffShiftSql, flatValues);
-      } catch (err) {
-        logger.error('Error inserting into Clientstaffshifts', { error: err, attemptedSql: 'bulk insert', values: staffShiftInserts });
-        return res.status(500).json({ message: 'Failed to insert staff shifts.', error: err.message });
-      }
-    }
-
-    // Return the created shift request and staff shifts
-    const fetchShiftSql = 'SELECT csr.*, c.Name as clientname, cl.LocationName FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID WHERE csr.ID = ?';
-    const [createdShift] = await dbConn.query(fetchShiftSql, [clientshiftrequestid]);
-    const fetchStaffShiftsSql = 'SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ?';
-    const [createdStaffShifts] = await dbConn.query(fetchStaffShiftsSql, [clientshiftrequestid]);
-
-    // Fetch qualifications for the group and return as qualificationname (array of names)
-    const qualNamesSql = `SELECT q.Name, q.Additionalvalue
-     FROM Qualificationgroupitems qgi
-     JOIN Qualifications q ON qgi.Qualificationid = q.ID
-     WHERE qgi.Qualificationgroupid = ?`;
-    const [qualRows] = await dbConn.query(qualNamesSql, [qualificationgroupid]);
-    const qualificationname = qualRows.map(q => q.Name);
-
-    // ================== send notifications to employees ==================
-    // Fetch all Employee - Standard User users' emails
-    const [employeeRows] = await dbConn.query(`
-      SELECT u.email, u.fullname
-      FROM Users u
-      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
-      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-      WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
-    `);
-    logger.info('Employee notification target list', { count: employeeRows.length, emails: employeeRows.map(e => e.email) });
-    if (employeeRows && employeeRows.length) {
-      const shift = createdShift[0];
-      const locationName = shift.LocationName || '';
-      const clientName = shift.clientname || '';
-      const shiftDate = shift.Shiftdate;
-      const startTime = shift.Starttime;
-      const endTime = shift.Endtime;
-      // Await all emails before responding
-      await Promise.all(employeeRows.map(async (emp) => {
-        logger.info('Sending shift notification email', { to: emp.email });
-        const template = mailTemplates.shiftNewEmployee({
-          employeeName: emp.fullname,
-          locationName,
-          clientName,
-          shiftDate,
-          startTime,
-          endTime,
-          qualificationNames: qualificationname
-        });
-        try {
-          await sendMail({
-            to: emp.email,
-            subject: template.subject,
-            html: template.html
-          });
-        } catch (e) {
-          logger.error('Email send error (new shift to employee)', { error: e, email: emp.email });
-        }
-      }));
-    }
-
-    // Respond only after notifications
-    res.status(201).json({
-      message: 'Shift request created successfully',
-      shift: {
-        ...createdShift[0],
-        qualificationname, // keep variable name for frontend
-        StaffShifts: createdStaffShifts
-      }
-    });
+    const formatted = rows.map(row => ({
+      ...row,
+      Shiftdate: formatDate(row.Shiftdate),
+      Starttime: formatDateTime(row.Starttime),
+      Endtime: formatDateTime(row.Endtime),
+      qualificationname: qualMap[row.Qualificationgroupid] || []
+    }));
+    res.status(200).json({ myShifts: formatted });
   } catch (err) {
-    logger.error('Create shift request error', { error: err, sql: err.sql || undefined });
-    res.status(500).json({ message: 'Failed to create shift request.', error: err.message, sql: err.sql || undefined });
+    logger.error('Get my shifts error', { error: err });
+    res.status(500).json({ message: 'Error fetching my shifts', error: err });
   }
 };
-// ================== end createClientShiftRequest ==================
+// ================== end getMyShifts ==================
 
 

@@ -103,6 +103,9 @@ router.post('/unlink-client-user', authenticate, authorizeStaffOrAdmin, authCont
 // Soft-delete a person (People table) by setting deletedat and deletedbyid
 router.delete('/People/:id', authenticate, authController.softDeletePerson);
 
+// Route to get shifts for the logged-in employee
+router.get('/my-shifts', authenticate, authController.getMyShifts);
+
 console.log('authController:', authController);
 console.log('authController keys:', Object.keys(authController));
 console.log('authController.getAllClientLocations:', typeof authController.getAllClientLocations);

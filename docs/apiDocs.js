@@ -225,17 +225,17 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
   {
     method: 'GET',
     path: '/api/my-client-locations',
-    description: 'View all clients and their locations assigned to the logged-in user. Accessible by Client - Standard User, System Admin, Staff - Standard User.',
+    description: 'View all clients and their locations. System Admin and Staff - Standard User see all client locations; Client - Standard User sees only their linked client locations.',
     userType: ['Client - Standard User', 'System Admin', 'Staff - Standard User'],
     headers: ['Authorization: Bearer <JWT token> (Client - Standard User, System Admin, or Staff - Standard User)'],
     NOTE: `
 ──────────────────────────────────────────────────────────────
 **How this API works (Client-centric model):**
 ──────────────────────────────────────────────────────────────
-- Returns all clients the user is linked to (via Userclients), each with an array of their locations (from Clientlocations).
-- If the user is not linked to any client, an empty array is returned.
+- System Admin and Staff - Standard User: See all clients and all their locations (not just linked ones).
+- Client - Standard User: Sees only clients and locations they are linked to (via Userclients).
 - The response is grouped by client, with each client object containing an array of their locations.
-- **NEW:** Staff - Standard User can now use this endpoint to view all clients and locations they are linked to (if any).
+- If the user is not linked to any client (for Client - Standard User), an empty array is returned.
 
 ──────────────────────────────────────────────────────────────
 **How to use this API:**
@@ -243,7 +243,7 @@ curl -X POST https://your-api-domain/api/link-client-user-location \
 1. Log in as a Client - Standard User, System Admin, or Staff - Standard User and get the JWT token.
 2. Make a GET request to /api/my-client-locations.
 3. Include the JWT token in the Authorization header.
-4. The response will be a list of assigned clients, each with their locations.
+4. The response will be a list of clients, each with their locations.
 
 ──────────────────────────────────────────────────────────────
 **Example cURL:**
@@ -259,7 +259,7 @@ curl -X GET https://your-api-domain/api/my-client-locations \
     },
     exampleResponse: {
       200: {
-        description: 'List of assigned clients, each with their locations',
+        description: 'List of clients, each with their locations',
         body: {
           clients: [
             {
@@ -283,13 +283,13 @@ curl -X GET https://your-api-domain/api/my-client-locations \
                 // ...more locations for this client...
               ]
             },
-            // ...more clients if user is linked to multiple clients...
+            // ...more clients if user is linked to multiple clients (Client - Standard User) or all clients (admin/staff)...
           ]
         }
       },
       403: 'Access denied'
     },
-    NOTE: 'This endpoint returns all clients the user is linked to, each with an array of their locations. If the user is not linked to any client, an empty array is returned. The response is grouped by client. Staff - Standard User can now use this endpoint.'
+    NOTE: 'System Admin and Staff - Standard User see all client locations; Client - Standard User sees only their linked client locations. The response is grouped by client.'
   },
   {
     method: 'POST',
@@ -642,6 +642,84 @@ curl -X GET https://your-api-domain/api/my-client-locations \
         404.1: { message: 'User is not linked to this client.' }
       }
     }
+  },
+  {
+    method: 'GET',
+    path: '/api/my-shifts',
+    description: 'Get My Shifts (Employee)',
+    userType: ['Employee - Standard User'],
+    headers: ['Authorization: Bearer <JWT token> (Employee - Standard User)'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Employee-centric model):**
+──────────────────────────────────────────────────────────────
+- Returns all shifts that the logged-in employee has accepted (status 'pending approval') or has been assigned (status 'approved').
+- The endpoint allows employees to track the shifts they have accepted or are scheduled to work.
+
+──────────────────────────────────────────────────────────────
+**Data Fetched:**
+──────────────────────────────────────────────────────────────
+- Staff shift slot ID
+- Parent shift request ID
+- Client ID
+- Shift status ('pending approval' or 'approved')
+- Slot order number
+- Shift date (YYYY-MM-DD)
+- Shift start time (YYYY-MM-DD HH:mm)
+- Shift end time (YYYY-MM-DD HH:mm)
+- Qualification group ID
+- Location name
+- Location address
+- Client name
+- List of qualification names required for the shift
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in as Employee - Standard User and get the JWT token.
+2. Make a GET request to /api/my-shifts.
+3. Include the JWT token in the Authorization header.
+4. The response will be a list of shifts assigned to the employee.
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/my-shifts \
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'List of shifts assigned to the employee',
+        body: {
+          myShifts: [
+            {
+              staffshiftid: 1,
+              Clientshiftrequestid: 101,
+              Clientid: 3,
+              Status: 'pending approval',
+              Order: 1,
+              Shiftdate: '2025-06-20',
+              Starttime: '2025-06-20 08:00',
+              Endtime: '2025-06-20 16:00',
+              Qualificationgroupid: 12,
+              LocationName: 'Main Campus',
+              LocationAddress: '123 Main St',
+              clientname: 'Acme Hospital',
+              qualificationname: ['Nurse', 'CPR']
+            },
+            // ...more shifts...
+          ]
+        }
+      },
+      403: 'Access denied'
+    },
+    NOTE: 'This endpoint returns all shifts that the logged-in employee has accepted or has been assigned. Only available to Employee - Standard User accounts. Data is fetched by joining Clientstaffshifts, Clientshiftrequests, Clientlocations, and Clients tables. Useful for employees to track their upcoming and pending shifts.'
   }
 ];
 
