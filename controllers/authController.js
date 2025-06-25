@@ -1052,4 +1052,64 @@ exports.getClientLocations = async (req, res) => {
 };
 // ================== end getClientLocations ==================
 
+// ================== getClientUserLocationsByEmail ==================
+// Admin staff: Get all client locations linked to a client user by email address.
+exports.getClientUserLocationsByEmail = async (req, res) => {
+  const requesterType = req.user?.usertype;
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
+  }
+  const email = req.query.emailaddress;
+  if (!email) {
+    return res.status(400).json({ message: 'Missing emailaddress query parameter.' });
+  }
+  try {
+    // Find the user by email and check usertype
+    const [userRows] = await db.query(
+      `SELECT u.id, u.email, ut.Name as usertype, p.Firstname, p.Lastname
+       FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       LEFT JOIN People p ON u.id = p.Linkeduserid
+       WHERE u.email = ?` , [email]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+    // Get all clientids for this user from Userclients
+    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [user.id]);
+    if (!clientRows.length) {
+      return res.status(200).json({ locations: [] });
+    }
+    const clientIds = clientRows.map(row => row.clientid);
+    // Get all locations for these clientids, join with client info
+    const [locations] = await db.query(
+      `SELECT cl.*, c.Name as clientname
+       FROM Clientlocations cl
+       LEFT JOIN Clients c ON cl.clientid = c.id
+       WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')})`,
+      clientIds
+    );
+    // Attach user info to each location for clarity
+    const result = locations.map(loc => ({
+      ID: loc.ID,
+      LocationName: loc.LocationName,
+      clientid: loc.clientid,
+      clientname: loc.clientname,
+      useremail: user.email,
+      userfirstname: user.Firstname,
+      userlastname: user.Lastname
+    }));
+    res.status(200).json({ locations: result });
+  } catch (err) {
+    logger.error('Get client user locations by email error', { error: err });
+    res.status(500).json({ message: 'Error fetching client user locations', error: err });
+  }
+};
+// ================== end getClientUserLocationsByEmail ==================
+
 

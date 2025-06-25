@@ -84,6 +84,9 @@ router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin
 // Staff/Admin: Get all clients and their linked locations
 router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, authController.getAllClientLocations); // Changed to use authController prefix
 
+// Admin staff: Get all client locations linked to a client user by email address
+router.get('/client-user-locations', authenticate, authorizeStaffOrAdmin, authController.getClientUserLocationsByEmail);
+
 // Soft-delete a person (People table) by setting deletedat and deletedbyid
 router.delete('/People/:id', authenticate, authController.softDeletePerson);
 

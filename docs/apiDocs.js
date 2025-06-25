@@ -647,8 +647,71 @@ curl -X GET https://your-api-domain/api/available-client-shifts \
     method: 'EMAIL',
     path: 'Automatic',
     description: 'Email notifications are sent automatically by the backend when a shift is accepted or approved. The frontend does NOT need to trigger any email logic.'
+  },
+  {
+    method: 'GET',
+    path: '/api/client-user-locations',
+    description: 'Admin staff: Get all client locations linked to a client user by email address.',
+    queryParams: ['emailaddress (required)'],
+    userType: ['Staff - Standard User', 'System Admin'],
+    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Only accessible by Staff - Standard User or System Admin.',
+      '- Pass the client user\'s email address as a query parameter (?emailaddress=clientuser@example.com).',
+      '- The user must exist and be a Client - Standard User.',
+      '- Returns all client locations the user is linked to (via Userclients), with client info.',
+      '- Returns an empty array if the user is not linked to any client.',
+      '- Returns a clear error if the user is not found or not a Client - Standard User.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**How to use this API:**',
+      '──────────────────────────────────────────────────────────────',
+      '1. Log in as Staff - Standard User or System Admin and get the JWT token.',
+      '2. Make a GET request to /api/client-user-locations?emailaddress=clientuser@example.com',
+      '3. Include the JWT token in the Authorization header.',
+      '4. The response will be a list of locations the client user is linked to, with client info.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X GET https://your-api-domain/api/client-user-locations?emailaddress=clientuser@example.com \\',
+      '  -H "Authorization: Bearer <JWT token>"',
+      '──────────────────────────────────────────────────────────────',
+    ].join('\n'),
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token for Staff - Standard User or System Admin>'
+      },
+      query: {
+        emailaddress: 'clientuser@example.com'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'List of locations the client user is linked to, with client info',
+        body: {
+          locations: [
+            {
+              ID: 9,
+              LocationName: 'Main Campus',
+              clientid: 1,
+              clientname: 'Acme Hospital',
+              useremail: 'clientuser@example.com',
+              userfirstname: 'Jane',
+              userlastname: 'Smith'
+            },
+            // ...more locations...
+          ]
+        }
+      },
+      400: { message: 'Target user is not a Client - Standard User.' },
+      403: { message: 'Access denied: Only staff or admin can use this endpoint.' },
+      404: { message: 'User not found with the provided email address.' }
+    }
   }
-
 ];
 
 module.exports = apiDocs;
