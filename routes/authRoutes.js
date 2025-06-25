@@ -42,7 +42,7 @@ function authorizeEmployeeOrStaffOrAdmin(req, res, next) {
 router.post('/login', authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/register', authenticate, authController.register);
-router.post('/clientshiftrequests', authenticate, authorizeClient, createShiftValidation, (req, res, next) => {
+router.post('/clientshiftrequests', authenticate, authorizeClientOrStaffOrAdmin, createShiftValidation, (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ message: 'Validation error', errors: errors.array() });

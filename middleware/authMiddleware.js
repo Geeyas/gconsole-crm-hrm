@@ -63,11 +63,25 @@ const authorizeAdmin = (req, res, next) => {
   return res.status(403).json({ message: 'Access denied: Admin only.' });
 };
 
+// Custom middleware to allow Client, Staff, or System Admin to raise shifts
+function authorizeClientOrStaffOrAdmin(req, res, next) {
+  const type = req.user?.usertype;
+  if (
+    type === 'Client - Standard User' ||
+    type === 'Staff - Standard User' ||
+    type === 'System Admin'
+  ) {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied: Only client, staff, or admin can raise shifts.' });
+}
+
 module.exports = {
   authenticate,
   authorizeManager,
   authorizeClient,
   authorizeStaffOrAdmin,
-  authorizeAdmin
+  authorizeAdmin,
+  authorizeClientOrStaffOrAdmin
 };
 
