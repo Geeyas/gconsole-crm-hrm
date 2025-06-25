@@ -49,6 +49,16 @@ router.post('/clientshiftrequests', authenticate, authorizeClient, createShiftVa
   }
   return authController.createClientShiftRequest(req, res, next);
 });
+// Edit a client shift request
+router.put('/clientshiftrequests/:id', authenticate, (req, res, next) => {
+  // Only creator or staff/admin can edit; logic enforced in controller
+  return authController.updateClientShiftRequest(req, res, next);
+});
+// Delete (soft-delete) a client shift request
+router.delete('/clientshiftrequests/:id', authenticate, (req, res, next) => {
+  // Only creator or staff/admin can delete; logic enforced in controller
+  return authController.deleteClientShiftRequest(req, res, next);
+});
 // Route to link a client user to a location
 router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, linkClientUserValidation, (req, res, next) => {
   const errors = validationResult(req);

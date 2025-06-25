@@ -371,225 +371,97 @@ curl -X GET https://your-api-domain/api/my-client-locations \
     }
   },
   {
-    method: 'GET',
-    path: '/api/available-client-shifts',
-    description: 'Get a list of available client shifts. The data you get depends on who you are (your user type).',
-    userType: ['Employee - Standard User', 'Client - Standard User', 'Staff - Standard User', 'System Admin'],
+    method: 'PUT',
+    path: '/api/clientshiftrequests/:id',
+    description: 'Edit an existing client shift request. Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can edit. Cannot edit if the shift has already started or is not in an editable state.',
+    urlParams: ['id (Clientshiftrequests table ID)'],
+    bodyParams: [
+      'clientlocationid (optional)',
+      'shiftdate (optional)',
+      'starttime (optional)',
+      'endtime (optional)',
+      'qualificationid (optional)',
+      'totalrequiredstaffnumber (optional)',
+      'additionalvalue (optional)'
+    ],
     headers: ['Authorization: Bearer <JWT token> (required)'],
-    queryParams: ['limit', 'page'],
-    response: {
-      200: {
-        description: 'A list of available shifts or shift slots, depending on user type',
+    example: {
+      request: {
+        url: '/api/clientshiftrequests/123',
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer <JWT token>',
+          'Content-Type': 'application/json'
+        },
         body: {
-          availableShifts: [
-            '// For Staff/Admin: All shifts for all hospitals/locations, grouped with staff requirements and slot status',
-            '// For Client: All shifts for their own hospital(s)/locations, grouped with staff requirements and slot status',
-            '// For Employee: Only open shift slots available to accept'
-          ],
-          pagination: {
-            page: 1,
-            limit: 10,
-            total: 123
-          }
+          'starttime': '2025-06-05 09:00:00',
+          'endtime': '2025-06-05 17:00:00',
+          'totalrequiredstaffnumber': 4
         }
       },
-      403: 'Access denied'
+      responses: {
+        200: { message: 'Shift request updated successfully.', shift: {/* updated shift object */} },
+        400: { message: 'Cannot edit shift: already started or not in editable state.' },
+        403: { message: 'Access denied: Only the creator or staff/admin can edit this shift.' },
+        404: { message: 'Shift request not found.' }
+      }
     },
-    NOTE: `
-    available-client-shifts?page=1&limit=50    -- sample to call the pagination data
-──────────────────────────────────────────────────────────────
-**How this API works (explained simply):**
-──────────────────────────────────────────────────────────────
-- This API shows you shifts, but what you see depends on your role (user type):
-  * If you are Staff or Admin: You see ALL shifts for ALL hospitals/locations. You also see how many staff are needed, how many have accepted, and how many spots are still open.
-  * If you are a Client: You see ONLY the shifts that belong to your own hospital(s) or locations. You do NOT see shifts for other clients.
-  * If you are an Employee: You see ONLY the open shift slots that you can accept (not grouped by shift, just a list of available slots).
-
-──────────────────────────────────────────────────────────────
-**How to use this API:**
-──────────────────────────────────────────────────────────────
-1. Log in the user and get the JWT token from the /api/login endpoint.
-2. When calling this API, always include the JWT token in the Authorization header like this:
-   Authorization: Bearer <JWT token>
-3. You can use pagination with the following query parameters:
-   - limit (default 10, max 50)
-   - page (default 1)
-   Example: /api/available-client-shifts?limit=5&page=2
-4. Make a GET request to /api/available-client-shifts.
-5. Read the 'availableShifts' array in the response and display it to the user.
-6. The response also includes a 'pagination' object: { page, limit, total }
-
-──────────────────────────────────────────────────────────────
-**Things to keep in mind:**
-──────────────────────────────────────────────────────────────
-- If you do not send a valid JWT token, you will get a 403 error (access denied).
-- If you are a Client, you will only see your own shifts. If you are Staff/Admin, you see everything. If you are an Employee, you only see open slots.
-- The API does all the filtering for you. The front-end does NOT need to filter the data based on user type.
-- Always check the user type from the JWT token (decode it on the front-end if you want to show/hide UI elements).
-- If the 'availableShifts' array is empty, it means there are no shifts for you to see.
-- This endpoint is safe to call for all logged-in users, but what you see depends on your role.
-
-──────────────────────────────────────────────────────────────
-**Example cURL:**
-──────────────────────────────────────────────────────────────
-curl -X GET https://your-api-domain/api/available-client-shifts \
-  -H "Authorization: Bearer <JWT token>" \
-  -G -d "limit=5" -d "page=2"
-──────────────────────────────────────────────────────────────
-`
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can edit.',
+      '- Cannot edit if the shift has already started or is not in an editable state.',
+      '- On update, audit fields (Updatedat, Updatedbyid) are set if present in the table.',
+      '- Returns the updated shift object on success.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X PUT https://your-api-domain/api/clientshiftrequests/123 \\',
+      '  -H "Authorization: Bearer <JWT token>" \\',
+      '  -H "Content-Type: application/json" \\',
+      '  -d \'{"starttime": "2025-06-05 09:00:00", "endtime": "2025-06-05 17:00:00", "totalrequiredstaffnumber": 4}\'',
+      '──────────────────────────────────────────────────────────────'
+    ].join('\n')
   },
   {
-    method: 'POST',
-    path: '/api/clientstaffshifts/:id/accept',
-    description: 'Accept an open client staff shift. Sets status to "pending approval" and records who accepted it and when.',
-    userType: ['Employee - Standard User', 'Staff - Standard User', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Employee, Staff, or Admin)'],
-    request: {
-      params: {
-        id: 'The ID of the Clientstaffshifts record to accept (must be in "open" status).'
-      }
-    },
-    response: {
-      200: {
-        description: 'Shift successfully accepted and is now pending approval.',
-        body: {
-          message: 'Shift accepted and pending admin approval',
-          shift: {
-            id: 24,
-            clientid: 3,
-            clientname: 'Acme Hospital',
-            clientlocationid: 9,
-            // ...other fields from Clientstaffshifts, LocationName, LocationAddress...
-          }
+    method: 'DELETE',
+    path: '/api/clientshiftrequests/:id',
+    description: 'Delete (soft-delete) a client shift request. Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can delete. Cannot delete if the shift has already started or is not in a deletable state.',
+    urlParams: ['id (Clientshiftrequests table ID)'],
+    headers: ['Authorization: Bearer <JWT token> (required)'],
+    example: {
+      request: {
+        url: '/api/clientshiftrequests/123',
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Bearer <JWT token>'
         }
       },
-      400: { message: 'Shift slot is not open for acceptance (e.g., already accepted, approved, or not in "open" status).' },
-      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
-      403: { message: 'Access denied: Only employees, staff, or admin can accept shifts.' },
-      404: { message: 'Shift slot not found.' },
-      500: { message: 'Failed to accept shift (server error).' }
-    },
-    example: {
-      request: 'POST /api/clientstaffshifts/24/accept',
-      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_EMPLOYEE_STAFF_OR_ADMIN>' },
-      response: {
-        message: "Shift accepted and pending admin approval"
+      responses: {
+        200: { message: 'Shift request deleted successfully.' },
+        400: { message: 'Cannot delete shift: already started or not in deletable state.' },
+        403: { message: 'Access denied: Only the creator or staff/admin can delete this shift.' },
+        404: { message: 'Shift request not found.' }
       }
     },
-    NOTE: `
-──────────────────────────────────────────────────────────────
-**Frontend Developer Notes:**
-──────────────────────────────────────────────────────────────
-- **Who can use:** 'Employee - Standard User', 'Staff - Standard User', 'System Admin'.
-- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "open".
-- **Action:**
-  - Updates \`Clientstaffshifts.Status\` to "pending approval".
-  - Sets \`Clientstaffshifts.Acceptedbyid\` to the ID of the user making the request.
-  - Sets \`Clientstaffshifts.Acceptedat\` to the current timestamp.
-- **Outcome:** The shift is no longer "open" and won't appear in the general list of available shifts for other employees. It now awaits action (approve/reject) by a Staff/Admin user.
-- **Error Handling:**
-  - \`400 Bad Request\`: If the shift is not "open".
-  - \`403 Forbidden\`: If the logged-in user is not an Employee, Staff, or Admin.
-  - \`404 Not Found\`: If the shift ID is invalid.
-──────────────────────────────────────────────────────────────
-`
-  },
-  {
-    method: 'POST',
-    path: '/api/clientstaffshifts/:id/approve',
-    description: 'Approve a "pending approval" client staff shift. Sets status to "approved" and records who approved it and when.',
-    userType: ['Staff - Standard User', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Staff or Admin only)'],
-    request: {
-      params: {
-        id: 'The ID of the Clientstaffshifts record to approve (must be in "pending approval" status).'
-      }
-    },
-    response: {
-      200: {
-        description: 'Shift successfully approved.',
-        body: {
-          message: 'Shift approved'
-        }
-      },
-      400: { message: 'Shift slot is not pending approval (e.g., already approved, open, or not in "pending approval" status).' },
-      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
-      403: { message: 'Access denied: Only staff or admin can approve shifts.' },
-      404: { message: 'Shift slot not found.' },
-      500: { message: 'Failed to approve shift (server error).' }
-    },
-    example: {
-      request: 'POST /api/clientstaffshifts/24/approve',
-      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_STAFF_OR_ADMIN>' },
-      response: {
-        message: "Shift approved"
-      }
-    },
-    NOTE: `
-──────────────────────────────────────────────────────────────
-**Frontend Developer Notes:**
-──────────────────────────────────────────────────────────────
-- **Who can use:** 'Staff - Standard User', 'System Admin'.
-- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "pending approval".
-- **Action:**
-  - Updates \`Clientstaffshifts.Status\` to "approved".
-  - Sets \`Clientstaffshifts.Approvedat\` to the current timestamp.
-  - Sets \`Clientstaffshifts.Approvedbyid\` to the ID of the admin/staff user making the request.
-- **Outcome:** The shift is now confirmed.
-- **Error Handling:**
-  - \`400 Bad Request\`: If the shift is not "pending approval".
-  - \`403 Forbidden\`: If the logged-in user is not Staff or Admin.
-  - \`404 Not Found\`: If the shift ID is invalid.
-──────────────────────────────────────────────────────────────
-`
-  },
-  {
-    method: 'POST',
-    path: '/api/clientstaffshifts/:id/reject',
-    description: 'Reject a "pending approval" client staff shift. Sets status back to "open" and clears acceptance details.',
-    userType: ['Staff - Standard User', 'System Admin'],
-    headers: ['Authorization: Bearer <JWT token> (Staff or Admin only)'],
-    request: {
-      params: {
-        id: 'The ID of the Clientstaffshifts record to reject (must be in "pending approval" status).'
-      }
-    },
-    response: {
-      200: {
-        description: 'Shift successfully rejected and reopened.',
-        body: {
-          message: 'Shift rejected and reopened'
-        }
-      },
-      400: { message: 'Shift slot is not pending approval (e.g., already approved, open, or not in "pending approval" status).' },
-      401: { message: 'Unauthorized (e.g., token missing, invalid, or expired).' },
-      403: { message: 'Access denied: Only staff or admin can reject shifts.' },
-      404: { message: 'Shift slot not found.' },
-      500: { message: 'Failed to reject shift (server error).' }
-    },
-    example: {
-      request: 'POST /api/clientstaffshifts/24/reject',
-      headers: { 'Authorization': 'Bearer <JWT_TOKEN_FOR_STAFF_OR_ADMIN>' },
-      response: {
-        message: "Shift rejected and reopened"
-      }
-    },
-    NOTE: `
-──────────────────────────────────────────────────────────────
-**Frontend Developer Notes:**
-──────────────────────────────────────────────────────────────
-- **Who can use:** 'Staff - Standard User', 'System Admin'.
-- **Shift Status:** The target shift (identified by \`:id\`) MUST have a \`Status\` of "pending approval".
-- **Action:**
-  - Updates \`Clientstaffshifts.Status\` back to "open".
-  - Clears (sets to NULL) \`Clientstaffshifts.Acceptedbyid\`, \`Clientstaffshifts.Acceptedat\`, \`Clientstaffshifts.Approvedat\`, and \`Clientstaffshifts.Approvedbyid\`.
-- **Outcome:** The shift becomes available again for any eligible employee to accept.
-- **Error Handling:**
-  - \`400 Bad Request\`: If the shift is not "pending approval".
-  - \`403 Forbidden\`: If the logged-in user is not Staff or Admin.
-  - \`404 Not Found\`: If the shift ID is invalid.
-──────────────────────────────────────────────────────────────
-`
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Only the user who created the shift (Client - Standard User) or Staff - Standard User/System Admin can delete.',
+      '- Cannot delete if the shift has already started or is not in a deletable state.',
+      '- This is a soft-delete: sets Deletedat and Deletedbyid if present in the table.',
+      '- Returns a confirmation message on success.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X DELETE https://your-api-domain/api/clientshiftrequests/123 \\',
+      '  -H "Authorization: Bearer <JWT token>"',
+      '──────────────────────────────────────────────────────────────'
+    ].join('\n')
   },
   {
     method: 'DELETE',

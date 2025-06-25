@@ -1157,4 +1157,91 @@ exports.unlinkClientUserFromClient = async (req, res) => {
 };
 // ================== end unlinkClientUserFromClient ==================
 
+// ================== updateClientShiftRequest ==================
+// Edit an existing client shift request (only by creator or staff/admin)
+exports.updateClientShiftRequest = async (req, res) => {
+  const dbConn = db;
+  const shiftId = req.params.id;
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  const now = new Date();
+  try {
+    // Fetch the shift request
+    const [rows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ? AND Deletedat IS NULL', [shiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+    const shift = rows[0];
+    // Only creator or staff/admin can edit
+    if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && shift.Createdbyid !== userId) {
+      return res.status(403).json({ message: 'Access denied: Only the creator or staff/admin can edit this shift.' });
+    }
+    // Prevent editing if shift has started or is not editable
+    const shiftStart = new Date(shift.Starttime);
+    if (shiftStart <= now) {
+      return res.status(400).json({ message: 'Cannot edit shift: already started or not in editable state.' });
+    }
+    // Build update fields
+    const allowedFields = ['clientlocationid', 'shiftdate', 'starttime', 'endtime', 'qualificationid', 'totalrequiredstaffnumber', 'additionalvalue'];
+    const updates = [];
+    const params = [];
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates.push(`${field.charAt(0).toUpperCase() + field.slice(1) } = ?`);
+        params.push(req.body[field]);
+      }
+    }
+    if (!updates.length) {
+      return res.status(400).json({ message: 'No valid fields to update.' });
+    }
+    // Always update audit fields
+    updates.push('Updatedat = ?');
+    updates.push('Updatedbyid = ?');
+    params.push(now, userId);
+    params.push(shiftId);
+    await dbConn.query(`UPDATE Clientshiftrequests SET ${updates.join(', ')} WHERE id = ?`, params);
+    // Return updated shift
+    const [updatedRows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [shiftId]);
+    res.status(200).json({ message: 'Shift request updated successfully.', shift: updatedRows[0] });
+  } catch (err) {
+    logger.error('Update shift request error', { error: err });
+    res.status(500).json({ message: 'Failed to update shift request.', error: err.message });
+  }
+};
+// ================== end updateClientShiftRequest ==================
+
+// ================== deleteClientShiftRequest ==================
+// Soft-delete a client shift request (only by creator or staff/admin)
+exports.deleteClientShiftRequest = async (req, res) => {
+  const dbConn = db;
+  const shiftId = req.params.id;
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  const now = new Date();
+  try {
+    // Fetch the shift request
+    const [rows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ? AND Deletedat IS NULL', [shiftId]);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+    const shift = rows[0];
+    // Only creator or staff/admin can delete
+    if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && shift.Createdbyid !== userId) {
+      return res.status(403).json({ message: 'Access denied: Only the creator or staff/admin can delete this shift.' });
+    }
+    // Prevent deleting if shift has started or is not deletable
+    const shiftStart = new Date(shift.Starttime);
+    if (shiftStart <= now) {
+      return res.status(400).json({ message: 'Cannot delete shift: already started or not in deletable state.' });
+    }
+    // Soft-delete: set Deletedat and Deletedbyid
+    await dbConn.query('UPDATE Clientshiftrequests SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, shiftId]);
+    res.status(200).json({ message: 'Shift request deleted successfully.' });
+  } catch (err) {
+    logger.error('Delete shift request error', { error: err });
+    res.status(500).json({ message: 'Failed to delete shift request.', error: err.message });
+  }
+};
+// ================== end deleteClientShiftRequest ==================
+
 
