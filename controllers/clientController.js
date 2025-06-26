@@ -45,18 +45,24 @@ exports.updateClient = async (req, res) => {
   }
 };
 
-// Soft-delete a client
+// Soft-delete a client and all linked locations
 exports.deleteClient = async (req, res) => {
   if (!isStaffOrAdmin(req.user)) {
     return res.status(403).json({ message: 'Access denied' });
   }
   const clientId = req.params.id;
   try {
+    // Soft-delete the client
     await db.query(
       'UPDATE Clients SET Deletedat = NOW(), Deletedbyid = ? WHERE ID = ? AND Deletedat IS NULL',
       [req.user.id, clientId]
     );
-    res.status(200).json({ message: 'Client deleted (soft)' });
+    // Soft-delete all linked client locations
+    await db.query(
+      'UPDATE Clientlocations SET Deletedat = NOW(), Deletedbyid = ? WHERE Clientid = ? AND Deletedat IS NULL',
+      [req.user.id, clientId]
+    );
+    res.status(200).json({ message: 'Client and all linked locations deleted (soft)' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete client', error: err.message });
   }
