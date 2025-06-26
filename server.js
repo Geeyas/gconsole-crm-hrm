@@ -42,7 +42,9 @@ const corsOptions = {
     'https://workforce-mgmt-61603.firebaseapp.com',
     'https://hrm.ygit.tech',
     'http://localhost:4200',
-    'https://rostermatic.netlify.app/'
+    'https://rostermatic.netlify.app/',
+    'https://rostermatic-b2ae0.web.app/',
+    'https://console.firebase.google.com/project/rostermatic-b2ae0/overview'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
