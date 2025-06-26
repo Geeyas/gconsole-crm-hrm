@@ -1394,13 +1394,13 @@ exports.updateClientShiftRequest = async (req, res) => {
         // Only remove slots that are not assigned/accepted
         for (let i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
           const slot = slots[i];
-          logger.info('[updateClientShiftRequest] Checking slot for removal', { slotId: slot.id, Assignedtouserid: slot.Assignedtouserid, Status: slot.Status, Deletedat: slot.Deletedat });
+          logger.info('[updateClientShiftRequest] Checking slot for removal', { slotId: slot.ID, Assignedtouserid: slot.Assignedtouserid, Status: slot.Status, Deletedat: slot.Deletedat });
           if (!slot.Assignedtouserid && slot.Status === 'open' && !slot.Deletedat) {
-            await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.id]);
-            logger.info('[updateClientShiftRequest] Soft-deleted slot', { slotId: slot.id });
+            await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.ID]);
+            logger.info('[updateClientShiftRequest] Soft-deleted slot', { slotId: slot.ID });
             toRemove--;
           } else {
-            logger.info('[updateClientShiftRequest] Slot not eligible for removal', { slotId: slot.id });
+            logger.info('[updateClientShiftRequest] Slot not eligible for removal', { slotId: slot.ID });
           }
         }
         // If not enough unassigned slots, the rest remain (data integrity)
