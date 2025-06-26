@@ -1362,11 +1362,9 @@ exports.updateClientShiftRequest = async (req, res) => {
       // Fetch all staff shift slots for this request, ordered by `Order`
       const [slots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? ORDER BY `Order`', [shiftId]);
       const currentCount = slots.length;
-      logger.info('[updateClientShiftRequest] Slot adjustment', { shiftId, oldTotalRequired, newTotalRequired, currentCount, slots });
       if (newTotalRequired > currentCount) {
         // Add new slots
         const toAdd = newTotalRequired - currentCount;
-        logger.info('[updateClientShiftRequest] Adding slots', { toAdd });
         const staffShiftInserts = [];
         for (let i = currentCount + 1; i <= newTotalRequired; i++) {
           staffShiftInserts.push([
@@ -1390,23 +1388,17 @@ exports.updateClientShiftRequest = async (req, res) => {
       } else if (newTotalRequired < currentCount) {
         // Remove (soft-delete) unassigned slots, starting from the highest order
         let toRemove = currentCount - newTotalRequired;
-        logger.info('[updateClientShiftRequest] Removing slots', { toRemove });
         // Only remove slots that are not assigned/accepted
         for (let i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
           const slot = slots[i];
-          logger.info('[updateClientShiftRequest] Checking slot for removal', { slotId: slot.ID, Assignedtouserid: slot.Assignedtouserid, Status: slot.Status, Deletedat: slot.Deletedat });
+          // PROD: Remove verbose logs
           if (!slot.Assignedtouserid && slot.Status === 'open' && !slot.Deletedat) {
             await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.ID]);
-            logger.info('[updateClientShiftRequest] Soft-deleted slot', { slotId: slot.ID });
             toRemove--;
-          } else {
-            logger.info('[updateClientShiftRequest] Slot not eligible for removal', { slotId: slot.ID });
           }
         }
         // If not enough unassigned slots, the rest remain (data integrity)
-        if (toRemove > 0) {
-          logger.warn('[updateClientShiftRequest] Not enough unassigned open slots to remove', { toRemove });
-        }
+        // (Optional: log a warning in non-production only)
       }
     }
     // ================== END STAFF SHIFT SLOT ADJUSTMENT ==================
