@@ -1143,12 +1143,12 @@ exports.rejectClientStaffShift = async (req, res) => {
     if (shift.Status !== 'pending approval') {
       return res.status(400).json({ message: 'Shift slot is not pending approval' });
     }
-    // 2. Reject the shift
+    // 2. Reject the shift: set status back to 'open', clear assignment, approval fields
     await db.query(
-      'UPDATE Clientstaffshifts SET Status = ?, Approvedbyid = ?, Approvedat = NOW() WHERE id = ?',
-      ['rejected', rejectorId, staffShiftId]
+      'UPDATE Clientstaffshifts SET Status = ?, Assignedtouserid = NULL, Approvedbyid = NULL, Approvedat = NULL WHERE id = ?',
+      ['open', staffShiftId]
     );
-    // 3. Fetch updated shift info
+    // 3. Fetch updated shift info (for notification)
     const [updatedShiftRows] = await db.query(`
       SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName, u.email as employeeEmail, csr.Shiftdate AS Shiftdate, csr.Starttime AS Starttime, csr.Endtime AS Endtime
       FROM Clientstaffshifts css
@@ -1158,24 +1158,30 @@ exports.rejectClientStaffShift = async (req, res) => {
       LEFT JOIN Users u ON css.Assignedtouserid = u.id
       WHERE css.id = ?
     `, [staffShiftId]);
-    const updatedShift = updatedShiftRows[0] || null;
-    // 4. Notify employee
-    if (updatedShift && updatedShift.employeeEmail) {
+    // Note: After clearing assignment, employee info will be null, so use previous assignment for notification
+    // Instead, get the previous employee info before clearing
+    const [prevEmployeeRows] = await db.query(
+      'SELECT u.fullname as employeeName, u.email as employeeEmail FROM Users u WHERE u.id = ?',
+      [shift.Assignedtouserid]
+    );
+    const prevEmployee = prevEmployeeRows[0] || {};
+    // 4. Notify employee (if there was one assigned)
+    if (prevEmployee.employeeEmail) {
       const templateEmp = mailTemplates.shiftRejectedEmployee({
-        employeeName: updatedShift.employeeName,
-        clientName: updatedShift.clientname,
-        locationName: updatedShift.LocationName,
-        shiftDate: updatedShift.Shiftdate,
-        startTime: updatedShift.Starttime,
-        endTime: updatedShift.Endtime
+        employeeName: prevEmployee.employeeName,
+        clientName: updatedShiftRows[0]?.clientname,
+        locationName: updatedShiftRows[0]?.LocationName,
+        shiftDate: updatedShiftRows[0]?.Shiftdate,
+        startTime: updatedShiftRows[0]?.Starttime,
+        endTime: updatedShiftRows[0]?.Endtime
       });
       sendMail({
-        to: updatedShift.employeeEmail,
+        to: prevEmployee.employeeEmail,
         subject: templateEmp.subject,
         html: templateEmp.html
       }).catch(e => logger.error('Email send error (reject shift to employee)', { error: e }));
     }
-    res.status(200).json({ message: 'Shift rejected and employee notified', shift: updatedShift });
+    res.status(200).json({ message: 'Shift rejected, employee notified, and slot reopened for others.', shift: updatedShiftRows[0] });
   } catch (err) {
     res.status(500).json({ message: 'Failed to reject shift', error: err.message });
   }
