@@ -33,12 +33,27 @@ exports.updateClient = async (req, res) => {
   }
   const clientId = req.params.id;
   const { Name, ...fields } = req.body;
-  if (!Name) return res.status(400).json({ message: 'Name is required' });
+  if (!Name && Object.keys(fields).length === 0) {
+    return res.status(400).json({ message: 'At least one field is required to update' });
+  }
   try {
-    await db.query(
-      'UPDATE Clients SET Name = ?, Updatedat = NOW(), Updatedbyid = ? WHERE ID = ? AND Deletedat IS NULL',
-      [Name, req.user.id, clientId]
-    );
+    // Build dynamic SET clause
+    const updates = [];
+    const params = [];
+    if (Name) {
+      updates.push('Name = ?');
+      params.push(Name);
+    }
+    for (const [key, value] of Object.entries(fields)) {
+      updates.push(`${key} = ?`);
+      params.push(value);
+    }
+    updates.push('Updatedat = NOW()');
+    updates.push('Updatedbyid = ?');
+    params.push(req.user.id);
+    params.push(clientId);
+    const sql = `UPDATE Clients SET ${updates.join(', ')} WHERE ID = ? AND Deletedat IS NULL`;
+    await db.query(sql, params);
     res.status(200).json({ message: 'Client updated' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update client', error: err.message });
