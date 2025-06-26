@@ -1420,6 +1420,38 @@ exports.updateClientShiftRequest = async (req, res) => {
       );
       qualificationname = qualRows.map(q => q.Name);
     }
+
+    // ========== Notify assigned/approved employees about shift update =========
+    // Find all staff shift slots for this request with status 'approved' and assigned employee
+    const [approvedSlots] = await dbConn.query(
+      `SELECT css.id, css.Assignedtouserid, u.email, u.fullname, cl.LocationName, cl.LocationAddress, c.Name as clientname
+       FROM Clientstaffshifts css
+       LEFT JOIN Users u ON css.Assignedtouserid = u.id
+       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+       LEFT JOIN Clients c ON cl.clientid = c.id
+       WHERE css.Clientshiftrequestid = ? AND css.Status = 'approved' AND css.Assignedtouserid IS NOT NULL AND css.Deletedat IS NULL`,
+      [shiftId]
+    );
+    for (const slot of approvedSlots) {
+      if (slot.email) {
+        const templateEmp = mailTemplates.shiftUpdatedEmployee({
+          employeeName: slot.fullname,
+          clientName: slot.clientname,
+          locationName: slot.LocationName,
+          shiftDate: updatedRows[0].Shiftdate,
+          startTime: updatedRows[0].Starttime,
+          endTime: updatedRows[0].Endtime
+        });
+        sendMail({
+          to: slot.email,
+          subject: templateEmp.subject,
+          html: templateEmp.html
+        }).catch(e => logger.error('Email send error (shift update to employee)', { error: e }));
+      }
+    }
+    // ========== End notification ==========
+
     res.status(200).json({ message: 'Shift request updated successfully.', shift: { ...updatedRows[0], qualificationname } });
   } catch (err) {
     logger.error('Update shift request error', { error: err });
@@ -1535,19 +1567,27 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
   }
 
   if (!emailaddress) {
+
+
     return res.status(400).json({ message: 'Missing emailaddress in request body.' });
   }
 
   try {
-    // 1. Find the employee by email
+    // 1. Find the employee by email and check usertype
     const [userRows] = await db.query(
-      `SELECT id, fullname, email FROM Users WHERE email = ?`,
+      `SELECT u.id, u.fullname, u.email, ut.Name as usertype FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.email = ?`,
       [emailaddress]
     );
     if (!userRows.length) {
       return res.status(404).json({ message: 'Employee not found with the provided email address.' });
     }
     const employee = userRows[0];
+    if (employee.usertype !== 'Employee - Standard User') {
+      return res.status(400).json({ message: 'Provided email does not belong to an employee user.' });
+    }
 
     // 2. Get the staff shift slot and its shift request info
     const [shiftRows] = await db.query(
@@ -1653,3 +1693,72 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
   }
 };
 // ================== end assignEmployeeToStaffShift ==================
+
+// ================== removeEmployeeFromStaffShift ==================
+// Remove an employee from a staff shift slot and notify them
+exports.removeEmployeeFromStaffShift = async (req, res) => {
+  const staffShiftId = req.params.id;
+  const removerId = req.user?.id;
+  const userType = req.user?.usertype;
+  const now = new Date();
+
+  // Only Staff, Client, or System Admin can remove
+  if (
+    userType !== 'Staff - Standard User' &&
+    userType !== 'System Admin' &&
+    userType !== 'Client - Standard User'
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff, client, or admin can remove employees.' });
+  }
+
+  try {
+    // 1. Get the shift slot and assigned employee
+    const [rows] = await db.query(
+      `SELECT css.id, css.Assignedtouserid, u.email, u.fullname, cl.LocationName, c.Name as clientname, csr.Shiftdate, csr.Starttime, csr.Endtime
+       FROM Clientstaffshifts css
+       LEFT JOIN Users u ON css.Assignedtouserid = u.id
+       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+       LEFT JOIN Clients c ON cl.clientid = c.id
+       WHERE css.id = ? AND css.Deletedat IS NULL`,
+      [staffShiftId]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Staff shift slot not found.' });
+    }
+    const slot = rows[0];
+    if (!slot.Assignedtouserid) {
+      return res.status(400).json({ message: 'No employee is currently assigned to this shift slot.' });
+    }
+
+    // 2. Remove the employee from the slot
+    await db.query(
+      `UPDATE Clientstaffshifts
+       SET Assignedtouserid = NULL, Status = 'open', Approvedbyid = NULL, Approvedat = NULL, Updatedat = ?, Updatedbyid = ?
+       WHERE id = ?`,
+      [now, removerId, staffShiftId]
+    );
+
+    // 3. Notify the removed employee
+    if (slot.email) {
+      const templateEmp = mailTemplates.shiftRemovedEmployee({
+        employeeName: slot.fullname,
+        clientName: slot.clientname,
+        locationName: slot.LocationName,
+        shiftDate: slot.Shiftdate,
+        startTime: slot.Starttime,
+        endTime: slot.Endtime
+      });
+      sendMail({
+        to: slot.email,
+        subject: templateEmp.subject,
+        html: templateEmp.html
+      }).catch(e => logger.error('Email send error (remove shift from employee)', { error: e }));
+    }
+
+    res.status(200).json({ message: 'Employee removed from shift slot and notified.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to remove employee from shift slot.', error: err.message });
+  }
+};
+// ================== end removeEmployeeFromStaffShift ==================

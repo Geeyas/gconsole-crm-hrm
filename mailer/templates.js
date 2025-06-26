@@ -204,11 +204,70 @@ function shiftNewEmployee({ employeeName, locationName, clientName, shiftDate, s
 }
 
 
+function shiftUpdatedEmployee({ employeeName, clientName, locationName, shiftDate, startTime, endTime }) {
+  return {
+    subject: `Shift Updated: ${formatDateTimeForEmail(shiftDate)} at ${locationName}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <h2 style="color: #1976d2; text-align: center;">✏️ Shift Updated</h2>
+        <p style="font-size: 16px;">Dear <strong>${employeeName}</strong>,</p>
+        <p style="font-size: 15px; line-height: 1.6;">
+          Your shift at <strong>${locationName}</strong> for <strong>${clientName}</strong> on <strong>${formatDateTimeForEmail(shiftDate)}</strong> has been 
+          <span style="color: #1976d2; font-weight: bold;">updated</span>.
+        </p>
+        <div style="background-color: #e3f2fd; border: 1px solid #bbdefb; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+          <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>📍 Location</strong></p>
+          <p style="font-size: 20px; margin: 5px 0 15px;"><strong>${locationName}</strong></p>
+          <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>🗓️ Date</strong></p>
+          <p style="font-size: 16px; margin: 5px 0 15px;">${formatDateTimeForEmail(shiftDate)}</p>
+          <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>⏰ Time</strong></p>
+          <p style="font-size: 16px; margin: 5px 0;">${formatDateTimeForEmail(startTime)} - ${formatDateTimeForEmail(endTime)}</p>
+        </div>
+        <p style="font-size: 15px;">Please review the updated details and attend as scheduled. If you have any questions, contact your supervisor.</p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
+function shiftRemovedEmployee({ employeeName, clientName, locationName, shiftDate, startTime, endTime }) {
+  return {
+    subject: `Shift Removal Notice: ${formatDateTimeForEmail(shiftDate)} at ${locationName}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <h2 style="color: #d32f2f; text-align: center;">❗ Shift Assignment Removed</h2>
+        <p style="font-size: 16px;">Dear <strong>${employeeName}</strong>,</p>
+        <p style="font-size: 15px; line-height: 1.6;">
+          You have been <span style="color: #d32f2f; font-weight: bold;">removed</span> from your shift at <strong>${locationName}</strong> for <strong>${clientName}</strong> on <strong>${formatDateTimeForEmail(shiftDate)}</strong>.
+        </p>
+        <div style="background-color: #fff4f4; border: 1px solid #f8d7da; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+          <p style="font-size: 18px; margin: 0; color: #b71c1c;"><strong>📍 Location</strong></p>
+          <p style="font-size: 20px; margin: 5px 0 15px;"><strong>${locationName}</strong></p>
+          <p style="font-size: 18px; margin: 0; color: #b71c1c;"><strong>🗓️ Date</strong></p>
+          <p style="font-size: 16px; margin: 5px 0 15px;">${formatDateTimeForEmail(shiftDate)}</p>
+          <p style="font-size: 18px; margin: 0; color: #b71c1c;"><strong>⏰ Time</strong></p>
+          <p style="font-size: 16px; margin: 5px 0;">${formatDateTimeForEmail(startTime)} - ${formatDateTimeForEmail(endTime)}</p>
+        </div>
+        <p style="font-size: 15px;">If you have questions, please contact your supervisor or HR representative.</p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
 module.exports = {
   shiftAcceptedClient,
   shiftApprovedEmployee,
   shiftApprovedClient,
   shiftRejectedEmployee,
   formatDateTimeForEmail,
-  shiftNewEmployee
+  shiftNewEmployee,
+  shiftUpdatedEmployee,
+  shiftRemovedEmployee
 };

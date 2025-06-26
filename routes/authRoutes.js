@@ -104,6 +104,9 @@ router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin
 // Assign employee to staff shift slot by email (admin/staff/client only)
 router.post('/clientstaffshifts/:id/assign-employee', authenticate, authorizeStaffClientOrAdmin, authController.assignEmployeeToStaffShift);
 
+// Remove employee from a staff shift slot (Staff, Client, or Admin)
+router.post('/clientstaffshifts/:id/remove-employee', authenticate, authorizeStaffClientOrAdmin, authController.removeEmployeeFromStaffShift);
+
 // Staff/Admin: Get all clients and their linked locations
 router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, authController.getAllClientLocations); // Changed to use authController prefix
 

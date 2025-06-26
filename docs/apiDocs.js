@@ -767,6 +767,22 @@ curl -X GET https://your-api-domain/api/my-shifts \
       '  -d \'{"emailaddress": "employee@email.com"}\'',
       '──────────────────────────────────────────────────────────────'
     ].join('\n')
+  },
+  {
+    method: 'POST',
+    path: '/api/clientstaffshifts/:id/remove-employee',
+    description: 'Removes the assigned employee from a staff shift slot, making the slot open and available for other employees to accept. Notifies the removed employee by email.',
+    urlParams: ['id (Clientstaffshift slot ID)'],
+    headers: ['Authorization: Bearer <JWT token> (Staff, Client, or System Admin)'],
+    bodyParams: [],
+    responses: {
+      200: { message: 'Employee removed from shift slot and notified.' },
+      400: { message: 'No employee is currently assigned to this shift slot.' },
+      403: { message: 'Access denied: Only staff, client, or admin can remove employees.' },
+      404: { message: 'Staff shift slot not found.' },
+      500: { message: 'Failed to remove employee from shift slot.' }
+    },
+    NOTE: 'This endpoint clears the assignment and approval fields for the slot, sets status to "open", and sends an email notification to the removed employee.'
   }
 ];
 
