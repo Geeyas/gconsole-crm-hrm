@@ -68,8 +68,8 @@ app.get('/api', (req, res) => {
 
 // Routes
 app.use('/api', authRoutes);
+app.use('/api', clientRoutes); // Register clientRoutes before crudRoutes
 app.use('/api', crudRoutes);
-app.use('/api', clientRoutes);
 
 // Handle 404 for unknown API routes
 app.use('/api/', (req, res) => {

@@ -88,7 +88,18 @@ exports.getAll = async (req, res) => {
   if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
-    const [results] = await db.query(`SELECT * FROM ??`, [table]);
+    // Check for Deletedat or deletedat column (case-insensitive)
+    const [columns] = await db.query('SHOW COLUMNS FROM ??', [table]);
+    const hasDeletedat = columns.some(col => col.Field.toLowerCase() === 'deletedat');
+    let sql = `SELECT * FROM ??`;
+    let params = [table];
+    if (hasDeletedat) {
+      sql += ' WHERE ?? IS NULL';
+      // Find the actual column name (case preserved)
+      const deletedatCol = columns.find(col => col.Field.toLowerCase() === 'deletedat').Field;
+      params.push(deletedatCol);
+    }
+    const [results] = await db.query(sql, params);
     res.status(200).json(results);
   } catch (err) {
     logger.error('Fetch error', { error: err });
