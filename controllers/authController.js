@@ -770,16 +770,18 @@ exports.getAvailableClientShifts = async (req, res) => {
           `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
            FROM Clientstaffshifts css
            LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')}) AND css.Deletedat IS NULL`,
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
           shiftIds
         );
-        staffShifts = staffRows;
+        // Filter out soft-deleted slots in code (defensive)
+        staffShifts = staffRows.filter(s => !s.Deletedat);
       }
       // Group staff shifts by shiftrequestid
       const staffShiftsByRequest = {};
       staffShifts.forEach(s => {
         if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
-        staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+        // Defensive: filter out soft-deleted slots
+        if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
       });
       // Fetch qualifications for all qualificationgroupids
       const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
@@ -798,14 +800,16 @@ exports.getAvailableClientShifts = async (req, res) => {
         }, {});
       }
       // Format output
-      const formatted = rows.map(row => ({
-        ...row,
-        Shiftdate: formatDate(row.Shiftdate),
-        Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime),
-        qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
-        StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
-      }));
+      const formatted = rows
+        .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
+        .map(row => ({
+          ...row,
+          Shiftdate: formatDate(row.Shiftdate),
+          Starttime: formatDateTime(row.Starttime),
+          Endtime: formatDateTime(row.Endtime),
+          qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
+          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
+        }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Client - Standard User' || userType === 'System Admin' || userType === 'Staff - Standard User') {
       // For Client, System Admin, and Staff - Standard User: See all shifts for their own hospital(s) or all
@@ -844,16 +848,18 @@ exports.getAvailableClientShifts = async (req, res) => {
           `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
            FROM Clientstaffshifts css
            LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')}) AND css.Deletedat IS NULL`,
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
           shiftIds
         );
-        staffShifts = staffRows;
+        // Filter out soft-deleted slots in code (defensive)
+        staffShifts = staffRows.filter(s => !s.Deletedat);
       }
       // Group staff shifts by shiftrequestid
       const staffShiftsByRequest = {};
       staffShifts.forEach(s => {
         if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
-        staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+        // Defensive: filter out soft-deleted slots
+        if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
       });
       // Fetch qualifications for all qualificationgroupids
       const groupIds = [...new Set(shiftRows.map(r => r.Qualificationgroupid).filter(Boolean))];
@@ -872,14 +878,16 @@ exports.getAvailableClientShifts = async (req, res) => {
         }, {});
       }
       // Format output
-      const formatted = shiftRows.map(row => ({
-        ...row,
-        Shiftdate: formatDate(row.Shiftdate),
-        Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime),
-        qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
-        StaffShifts: staffShiftsByRequest[row.shiftrequestid] || []
-      }));
+      const formatted = shiftRows
+        .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
+        .map(row => ({
+          ...row,
+          Shiftdate: formatDate(row.Shiftdate),
+          Starttime: formatDateTime(row.Starttime),
+          Endtime: formatDateTime(row.Endtime),
+          qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
+          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
+        }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
       // Get total count
@@ -1352,11 +1360,13 @@ exports.updateClientShiftRequest = async (req, res) => {
     // ================== STAFF SHIFT SLOT ADJUSTMENT ==================
     if (newTotalRequired !== undefined && newTotalRequired !== oldTotalRequired) {
       // Fetch all staff shift slots for this request, ordered by `Order`
-      const [slots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Deletedat IS NULL ORDER BY `Order`', [shiftId]);
+      const [slots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? ORDER BY `Order`', [shiftId]);
       const currentCount = slots.length;
+      logger.info('[updateClientShiftRequest] Slot adjustment', { shiftId, oldTotalRequired, newTotalRequired, currentCount, slots });
       if (newTotalRequired > currentCount) {
         // Add new slots
         const toAdd = newTotalRequired - currentCount;
+        logger.info('[updateClientShiftRequest] Adding slots', { toAdd });
         const staffShiftInserts = [];
         for (let i = currentCount + 1; i <= newTotalRequired; i++) {
           staffShiftInserts.push([
@@ -1380,15 +1390,23 @@ exports.updateClientShiftRequest = async (req, res) => {
       } else if (newTotalRequired < currentCount) {
         // Remove (soft-delete) unassigned slots, starting from the highest order
         let toRemove = currentCount - newTotalRequired;
+        logger.info('[updateClientShiftRequest] Removing slots', { toRemove });
         // Only remove slots that are not assigned/accepted
         for (let i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
           const slot = slots[i];
-          if (!slot.Assignedtouserid && slot.Status === 'open') {
+          logger.info('[updateClientShiftRequest] Checking slot for removal', { slotId: slot.id, Assignedtouserid: slot.Assignedtouserid, Status: slot.Status, Deletedat: slot.Deletedat });
+          if (!slot.Assignedtouserid && slot.Status === 'open' && !slot.Deletedat) {
             await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.id]);
+            logger.info('[updateClientShiftRequest] Soft-deleted slot', { slotId: slot.id });
             toRemove--;
+          } else {
+            logger.info('[updateClientShiftRequest] Slot not eligible for removal', { slotId: slot.id });
           }
         }
         // If not enough unassigned slots, the rest remain (data integrity)
+        if (toRemove > 0) {
+          logger.warn('[updateClientShiftRequest] Not enough unassigned open slots to remove', { toRemove });
+        }
       }
     }
     // ================== END STAFF SHIFT SLOT ADJUSTMENT ==================
