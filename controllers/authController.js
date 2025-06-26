@@ -890,11 +890,8 @@ exports.getAvailableClientShifts = async (req, res) => {
         }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
-      // Get total count
-      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM Clientstaffshifts WHERE Status = 'open' AND Deletedat IS NULL`);
-      total = countResult[0]?.total || 0;
-      // Employee: See only open shift slots that are not soft-deleted
-      [rows] = await db.query(`
+      // For Employee - Standard User: See only open staff shift slots (not assigned)
+      const [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
                cl.LocationName, cl.LocationAddress, c.Name AS clientname
@@ -902,7 +899,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
-        WHERE css.Status = 'open' AND css.Deletedat = IS NULL
+        WHERE css.Status = 'open' AND css.Deletedat IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
@@ -927,9 +924,9 @@ exports.getAvailableClientShifts = async (req, res) => {
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime),
-        qualificationname: qualMap[row.Qualificationgroupid] || [] // keep variable name
+        qualificationname: qualMap[row.Qualificationgroupid] || []
       }));
-      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: formatted.length } });
     } else if (userType) {
       // If userType is present but not recognized, return 403
       return res.status(403).json({ message: 'Access denied: Unknown user type', code: 'ACCESS_DENIED' });
@@ -1567,14 +1564,14 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
   }
 
   if (!emailaddress) {
-
-
     return res.status(400).json({ message: 'Missing emailaddress in request body.' });
   }
 
   try {
     // 1. Find the employee by email and check usertype
     const [userRows] = await db.query(
+     
+          
       `SELECT u.id, u.fullname, u.email, ut.Name as usertype FROM Users u
        LEFT JOIN Assignedusertypes au ON au.Userid = u.id
        LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
