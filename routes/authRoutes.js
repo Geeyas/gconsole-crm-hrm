@@ -40,6 +40,15 @@ function authorizeEmployeeOrStaffOrAdmin(req, res, next) {
   return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can accept shifts.' });
 }
 
+// Custom middleware to allow Staff, Client, or System Admin to assign employees to shifts
+function authorizeStaffClientOrAdmin(req, res, next) {
+  const type = req.user?.usertype;
+  if (type === 'Staff - Standard User' || type === 'System Admin' || type === 'Client - Standard User') {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied: Only staff, client, or admin can assign employees.' });
+}
+
 router.post('/login', authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.post('/register', authenticate, authController.register);
@@ -91,6 +100,9 @@ router.post('/clientstaffshifts/:id/approve', authenticate, authorizeStaffOrAdmi
 
 // Staff or Admin: Reject a client staff shift
 router.post('/clientstaffshifts/:id/reject', authenticate, authorizeStaffOrAdmin, authController.rejectClientStaffShift);
+
+// Assign employee to staff shift slot by email (admin/staff/client only)
+router.post('/clientstaffshifts/:id/assign-employee', authenticate, authorizeStaffClientOrAdmin, authController.assignEmployeeToStaffShift);
 
 // Staff/Admin: Get all clients and their linked locations
 router.get('/all-client-locations', authenticate, authorizeStaffOrAdmin, authController.getAllClientLocations); // Changed to use authController prefix

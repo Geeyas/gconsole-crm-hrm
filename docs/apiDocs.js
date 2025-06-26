@@ -720,6 +720,53 @@ curl -X GET https://your-api-domain/api/my-shifts \
       403: 'Access denied'
     },
     NOTE: 'This endpoint returns all shifts that the logged-in employee has accepted or has been assigned. Only available to Employee - Standard User accounts. Data is fetched by joining Clientstaffshifts, Clientshiftrequests, Clientlocations, and Clients tables. Useful for employees to track their upcoming and pending shifts.'
+  },
+  {
+    method: 'POST',
+    path: '/api/clientstaffshifts/:id/assign-employee',
+    description: 'Assign employee to staff shift slot',
+    bodyParams: ['emailaddress'],
+    urlParams: ['id'],
+    headers: ['Authorization: Bearer <JWT token> (Staff, Client, or System Admin)'],
+    example: {
+      request: {
+        url: '/api/clientstaffshifts/123/assign-employee',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer <JWT token>',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          "emailaddress": "employee@email.com"
+        }
+      },
+      responses: {
+        200: { 
+          message: 'Employee assigned to shift slot.',
+          staffshiftid: 123,
+          employeeid: 456
+        },
+        400: { message: 'Employee already has a shift assigned that overlaps with this time.' },
+        404: { message: 'Employee or staff shift slot not found' },
+        403: { message: 'Access denied' }
+      }
+    },
+    NOTE: [
+      '──────────────────────────────────────────────────────────────',
+      '**How this API works:**',
+      '──────────────────────────────────────────────────────────────',
+      '- Assigns the employee (by email) to the specified staff shift slot, with clash/overlap checks.',
+      '- Updates all relevant audit fields.',
+      '',
+      '──────────────────────────────────────────────────────────────',
+      '**Example cURL:**',
+      '──────────────────────────────────────────────────────────────',
+      'curl -X POST https://your-api-domain/api/clientstaffshifts/123/assign-employee \\',
+      '  -H "Authorization: Bearer <JWT token>" \\',
+      '  -H "Content-Type: application/json" \\',
+      '  -d \'{"emailaddress": "employee@email.com"}\'',
+      '──────────────────────────────────────────────────────────────'
+    ].join('\n')
   }
 ];
 

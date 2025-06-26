@@ -1516,4 +1516,91 @@ exports.getMyShifts = async (req, res) => {
 };
 // ================== end getMyShifts ==================
 
+// ================== assignEmployeeToStaffShift ==================
+// Assign an employee to a staff shift slot by email (admin/staff/client only)
+exports.assignEmployeeToStaffShift = async (req, res) => {
+  const staffShiftId = req.params.id;
+  const { emailaddress } = req.body;
+  const assignerId = req.user?.id;
+  const userType = req.user?.usertype;
+  const now = new Date();
 
+  // Only Staff, Client, or System Admin can assign
+  if (
+    userType !== 'Staff - Standard User' &&
+    userType !== 'System Admin' &&
+    userType !== 'Client - Standard User'
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff, client, or admin can assign employees.' });
+  }
+
+  if (!emailaddress) {
+    return res.status(400).json({ message: 'Missing emailaddress in request body.' });
+  }
+
+  try {
+    // 1. Find the employee by email
+    const [userRows] = await db.query(
+      `SELECT id, fullname, email FROM Users WHERE email = ?`,
+      [emailaddress]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'Employee not found with the provided email address.' });
+    }
+    const employee = userRows[0];
+
+    // 2. Get the staff shift slot and its shift request info
+    const [shiftRows] = await db.query(
+      `SELECT css.id, css.Clientshiftrequestid, csr.Shiftdate, csr.Starttime, csr.Endtime
+       FROM Clientstaffshifts css
+       JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+       WHERE css.id = ? AND css.Deletedat IS NULL`,
+      [staffShiftId]
+    );
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Staff shift slot not found.' });
+    }
+    const shiftSlot = shiftRows[0];
+
+    // 3. Check for overlapping shifts for this employee
+    const [overlapRows] = await db.query(
+      `SELECT css.id
+       FROM Clientstaffshifts css
+       JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+       WHERE css.Assignedtouserid = ?
+         AND css.Status IN ('pending approval', 'approved')
+         AND css.Deletedat IS NULL
+         AND csr.Shiftdate = ?
+         AND css.id != ?
+         AND NOT (
+           ? >= csr.Endtime OR
+           ? <= csr.Starttime
+         )`,
+      [
+        employee.id,
+        shiftSlot.Shiftdate,
+        staffShiftId,
+        shiftSlot.Starttime, // new shift start
+        shiftSlot.Endtime    // new shift end
+      ]
+    );
+    if (overlapRows.length) {
+      return res.status(400).json({ message: 'Employee already has a shift assigned that overlaps with this time.' });
+    }
+
+    // 4. Assign the employee and approve the slot, update audit fields
+    await db.query(
+      `UPDATE Clientstaffshifts
+       SET Assignedtouserid = ?, Status = 'approved', Approvedbyid = ?, Approvedat = ?, Updatedat = ?, Updatedbyid = ?
+       WHERE id = ?`,
+      [employee.id, assignerId, now, now, assignerId, staffShiftId]
+    );
+
+    // 5. (Optional) Send notification to employee (not implemented here)
+
+    res.status(200).json({ message: 'Employee assigned and shift approved.', staffshiftid: staffShiftId, employeeid: employee.id });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to assign employee to shift.', error: err.message });
+  }
+};
+// ================== end assignEmployeeToStaffShift ==================
