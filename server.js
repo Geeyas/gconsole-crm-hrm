@@ -9,6 +9,7 @@ const winston = require('winston');
 const apiDocs = require('./docs/apiDocs');
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
+const clientRoutes = require('./routes/clientRoutes');
 
 const app = express();
 app.use(cookieParser());
@@ -68,6 +69,7 @@ app.get('/api', (req, res) => {
 // Routes
 app.use('/api', authRoutes);
 app.use('/api', crudRoutes);
+app.use('/api', clientRoutes);
 
 // Handle 404 for unknown API routes
 app.use('/api/', (req, res) => {

@@ -76,8 +76,12 @@ function authorizeClientOrStaffOrAdmin(req, res, next) {
   return res.status(403).json({ message: 'Access denied: Only client, staff, or admin can raise shifts.' });
 }
 
+// For compatibility with routes expecting authenticateJWT
+module.exports.authenticateJWT = module.exports.authenticate;
+
 module.exports = {
   authenticate,
+  authenticateJWT: authenticate, // alias for compatibility
   authorizeManager,
   authorizeClient,
   authorizeStaffOrAdmin,
