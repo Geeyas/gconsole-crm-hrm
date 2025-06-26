@@ -1465,7 +1465,7 @@ exports.deleteClientShiftRequest = async (req, res) => {
 // ================== end deleteClientShiftRequest ==================
 
 // ================== getMyShifts ==================
-// Returns all shifts accepted or assigned to the logged-in employee (pending approval or approved)
+// Returns all shifts accepted, assigned, or rejected for the logged-in employee
 exports.getMyShifts = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
@@ -1473,7 +1473,7 @@ exports.getMyShifts = async (req, res) => {
     return res.status(403).json({ message: 'Access denied: Employees only' });
   }
   try {
-    // Get all staff shifts assigned to this user, status pending approval or approved
+    // Get all staff shifts assigned to this user, status pending approval, approved, or rejected
     const [rows] = await db.query(`
       SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
              csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
@@ -1482,7 +1482,7 @@ exports.getMyShifts = async (req, res) => {
       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
       LEFT JOIN Clients c ON cl.clientid = c.id
-      WHERE css.Assignedtouserid = ? AND css.Status IN ('pending approval', 'approved') AND css.Deletedat IS NULL
+      WHERE css.Assignedtouserid = ? AND css.Status IN ('pending approval', 'approved', 'rejected') AND css.Deletedat IS NULL
       ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
     `, [userId]);
     // Fetch qualifications for all qualificationgroupids
