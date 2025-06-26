@@ -902,7 +902,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
-        WHERE css.Status = 'open' AND css.Deletedat IS NULL
+        WHERE css.Status = 'open' AND css.Deletedat = IS NULL
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
@@ -1551,9 +1551,11 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
 
     // 2. Get the staff shift slot and its shift request info
     const [shiftRows] = await db.query(
-      `SELECT css.id, css.Clientshiftrequestid, csr.Shiftdate, csr.Starttime, csr.Endtime
+      `SELECT css.id, css.Clientshiftrequestid, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name as clientname
        FROM Clientstaffshifts css
        JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+       LEFT JOIN Clients c ON cl.clientid = c.id
        WHERE css.id = ? AND css.Deletedat IS NULL`,
       [staffShiftId]
     );
@@ -1596,7 +1598,54 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
       [employee.id, assignerId, now, now, assignerId, staffShiftId]
     );
 
-    // 5. (Optional) Send notification to employee (not implemented here)
+    // 5. Send notification to employee and all client users for this client
+    // Notify employee
+    if (employee.email) {
+      const templateEmp = mailTemplates.shiftApprovedEmployee({
+        employeeName: employee.fullname,
+        clientName: shiftSlot.clientname,
+        locationName: shiftSlot.LocationName,
+        shiftDate: shiftSlot.Shiftdate,
+        startTime: shiftSlot.Starttime,
+        endTime: shiftSlot.Endtime
+      });
+      sendMail({
+        to: employee.email,
+        subject: templateEmp.subject,
+        html: templateEmp.html
+      }).catch(e => logger.error('Email send error (assign shift to employee)', { error: e }));
+    }
+    // Notify all client users for this client
+    const [clientUsers] = await db.query(`
+      SELECT u.email, c.Name as clientName
+      FROM Userclients uc
+      LEFT JOIN Users u ON uc.userid = u.id
+      LEFT JOIN Clients c ON uc.clientid = c.id
+      WHERE uc.clientid = (
+        SELECT cl.clientid FROM Clientstaffshifts css
+        JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+        JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        WHERE css.id = ?
+        LIMIT 1
+      )
+    `, [staffShiftId]);
+    for (const client of clientUsers) {
+      const templateClient = mailTemplates.shiftApprovedClient({
+        clientName: client.clientName,
+        employeeName: employee.fullname,
+        locationName: shiftSlot.LocationName,
+        shiftDate: shiftSlot.Shiftdate,
+        startTime: shiftSlot.Starttime,
+        endTime: shiftSlot.Endtime
+      });
+      if (client.email) {
+        sendMail({
+          to: client.email,
+          subject: templateClient.subject,
+          html: templateClient.html
+        }).catch(e => logger.error('Email send error (assign shift to client)', { error: e }));
+      }
+    }
 
     res.status(200).json({ message: 'Employee assigned and shift approved.', staffshiftid: staffShiftId, employeeid: employee.id });
   } catch (err) {
