@@ -44,6 +44,7 @@ const corsOptions = {
     'http://localhost:4200',
     'https://rostermatic.netlify.app/',
     'https://rostermatic-b2ae0.web.app/',
+    'https://rostermatic-b2ae0.web.app',
     'https://console.firebase.google.com/project/rostermatic-b2ae0/overview'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
