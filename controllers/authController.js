@@ -1366,27 +1366,42 @@ exports.updateClientShiftRequest = async (req, res) => {
       const [slots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? ORDER BY `Order`', [shiftId]);
       const currentCount = slots.length;
       if (newTotalRequired > currentCount) {
-        // Add new slots
+        // Restore soft-deleted slots first
         const toAdd = newTotalRequired - currentCount;
-        const staffShiftInserts = [];
-        for (let i = currentCount + 1; i <= newTotalRequired; i++) {
-          staffShiftInserts.push([
-            shiftId,
-            shift.Clientid,
-            i,
-            'open', // Status
-            now,
-            userId,
-            now,
-            userId
-          ]);
+        let restored = 0;
+        // Find soft-deleted slots for this shift, ordered by `Order`
+        const [softDeletedSlots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Deletedat IS NOT NULL ORDER BY `Order`', [shiftId]);
+        for (let i = 0; i < softDeletedSlots.length && restored < toAdd; i++) {
+          const slot = softDeletedSlots[i];
+          await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = NULL, Deletedbyid = NULL, Updatedat = ?, Updatedbyid = ? WHERE id = ?', [now, userId, slot.ID]);
+          restored++;
         }
-        if (staffShiftInserts.length) {
-          const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-          const flatValues = staffShiftInserts.flat();
-          const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
-            '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
-          await dbConn.query(staffShiftSql, flatValues);
+        // After restoring, check how many more slots need to be created
+        const remainingToAdd = toAdd - restored;
+        if (remainingToAdd > 0) {
+          // Find the max `Order` value among all slots (including soft-deleted)
+          const [allSlots] = await dbConn.query('SELECT MAX(`Order`) as maxOrder FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [shiftId]);
+          let maxOrder = allSlots[0]?.maxOrder || 0;
+          const staffShiftInserts = [];
+          for (let i = 1; i <= remainingToAdd; i++) {
+            staffShiftInserts.push([
+              shiftId,
+              shift.Clientid,
+              maxOrder + i,
+              'open', // Status
+              now,
+              userId,
+              now,
+              userId
+            ]);
+          }
+          if (staffShiftInserts.length) {
+            const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+            const flatValues = staffShiftInserts.flat();
+            const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
+              '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
+            await dbConn.query(staffShiftSql, flatValues);
+          }
         }
       } else if (newTotalRequired < currentCount) {
         // Remove (soft-delete) unassigned slots, starting from the highest order
@@ -1394,14 +1409,12 @@ exports.updateClientShiftRequest = async (req, res) => {
         // Only remove slots that are not assigned/accepted
         for (let i = slots.length - 1; i >= 0 && toRemove > 0; i--) {
           const slot = slots[i];
-          // PROD: Remove verbose logs
           if (!slot.Assignedtouserid && slot.Status === 'open' && !slot.Deletedat) {
             await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = ?, Deletedbyid = ? WHERE id = ?', [now, userId, slot.ID]);
             toRemove--;
           }
         }
         // If not enough unassigned slots, the rest remain (data integrity)
-        // (Optional: log a warning in non-production only)
       }
     }
     // ================== END STAFF SHIFT SLOT ADJUSTMENT ==================
