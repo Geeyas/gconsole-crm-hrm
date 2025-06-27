@@ -16,10 +16,12 @@ exports.createClient = async (req, res) => {
   const { Name, ...fields } = req.body;
   if (!Name) return res.status(400).json({ message: 'Name is required' });
   try {
-    const [result] = await db.query(
-      'INSERT INTO Clients (Name, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, NOW(), ?, NOW(), ?)',
-      [Name, req.user.id, req.user.id]
-    );
+    // Build dynamic columns and values
+    const columns = ['Name', ...Object.keys(fields), 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
+    const placeholders = columns.map(() => '?');
+    const values = [Name, ...Object.values(fields), req.user.id, req.user.id];
+    const sql = `INSERT INTO Clients (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+    const [result] = await db.query(sql, values);
     res.status(201).json({ message: 'Client created', id: result.insertId });
   } catch (err) {
     res.status(500).json({ message: 'Failed to create client', error: err.message });
