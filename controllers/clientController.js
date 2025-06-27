@@ -77,9 +77,13 @@ exports.createClient = async (req, res) => {
     // Always build columns/values arrays correctly
     const extraColumns = Object.keys(filteredFields);
     const columns = ['Name', ...extraColumns, 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
-    const placeholders = columns.map(() => '?');
+    // Use NOW() for Createdat and Updatedat, and ? for the rest
+    const placeholders = columns.map(col => (col === 'Createdat' || col === 'Updatedat') ? 'NOW()' : '?');
+    // Only add values for columns that use ?
     const values = [Name, ...extraColumns.map(k => filteredFields[k]), req.user.id, req.user.id];
-    if (columns.length !== values.length) {
+    // Remove values for NOW() columns
+    // (values array already matches the number of ? placeholders)
+    if (placeholders.filter(p => p === '?').length !== values.length) {
       return res.status(400).json({ message: 'Invalid payload: columns and values length mismatch' });
     }
     const sql = `INSERT INTO Clients (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
