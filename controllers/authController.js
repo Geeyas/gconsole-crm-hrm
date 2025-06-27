@@ -72,7 +72,7 @@ exports.login = async (req, res, next) => {
         portal: user.portal_name
       },
       process.env.JWT_SECRET,
-      { expiresIn: '4h' }
+      { expiresIn: '2h' }
     );
 
     // Refresh Token (long-lived)
@@ -118,7 +118,7 @@ exports.refreshToken = (req, res) => {
         id: decoded.id
       },
       process.env.JWT_SECRET,
-      { expiresIn: '4h' }
+      { expiresIn: '2h' }
     );
 
     res.json({ token: newtoken });
