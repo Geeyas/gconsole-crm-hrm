@@ -16,10 +16,17 @@ exports.createClient = async (req, res) => {
   const { Name, ...fields } = req.body;
   if (!Name) return res.status(400).json({ message: 'Name is required' });
   try {
-    // Build dynamic columns and values
-    const columns = ['Name', ...Object.keys(fields), 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
+    // List of system fields to ignore
+    const systemFields = [
+      'ID', 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid', 'Deletedat', 'Deletedbyid', 'Sysstarttime'
+    ];
+    // Filter out system fields and fields with undefined or empty keys
+    const filteredFields = Object.entries(fields)
+      .filter(([key, value]) => key && !systemFields.includes(key) && value !== undefined)
+      .reduce((obj, [key, value]) => { obj[key] = value; return obj; }, {});
+    const columns = ['Name', ...Object.keys(filteredFields), 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
     const placeholders = columns.map(() => '?');
-    const values = [Name, ...Object.values(fields), req.user.id, req.user.id];
+    const values = [Name, ...Object.values(filteredFields), req.user.id, req.user.id];
     const sql = `INSERT INTO Clients (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
     const [result] = await db.query(sql, values);
     res.status(201).json({ message: 'Client created', id: result.insertId });
