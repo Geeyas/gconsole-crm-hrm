@@ -191,15 +191,10 @@ exports.register = async (req, res) => {
 // ================== end register ==================
 
 // ================== updatePassword ==================
-// Allows staff or admin to update a user's password.
+// Allows any authenticated user to update a user's password.
 exports.updatePassword = async (req, res) => {
   const { username, newPassword } = req.body;
   const updaterId = req.user?.id;
-
-  // Only Staff - Standard User or System Admin can update passwords
-  if (req.user?.usertype !== 'Staff - Standard User' && req.user?.usertype !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can update passwords.' });
-  }
 
   // Defensive: Accept both application/json and urlencoded
   if (!username || !newPassword) {
