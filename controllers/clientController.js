@@ -186,15 +186,30 @@ exports.updateClientLocation = async (req, res) => {
     return res.status(403).json({ message: 'Access denied' });
   }
   const locationId = req.params.id;
-  const { LocationName, LocationAddress, ...fields } = req.body;
-  if (!LocationName || !LocationAddress) {
-    return res.status(400).json({ message: 'LocationName and LocationAddress are required' });
+  const fields = req.body;
+  // List of valid columns in Clientlocations table (add more as needed)
+  const validColumns = [
+    'Clientid', 'Locationtypeid', 'Locationfunctionid', 'LocationName', 'LocationAddress', 'Country', 'State', 'Suburb', 'Postcode', 'Email', 'Fax', 'WebsiteURL', 'Contactcountry', 'Contactlocationaddress', 'Contactphonenumber', 'Contactpostcode', 'Contactsuburb', 'Iscontactaddresssame'
+  ];
+  // Filter only valid columns and skip system fields
+  const updates = [];
+  const params = [];
+  for (const [key, value] of Object.entries(fields)) {
+    if (validColumns.includes(key)) {
+      updates.push(`${key} = ?`);
+      params.push(value);
+    }
   }
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No valid fields provided for update' });
+  }
+  updates.push('Updatedat = NOW()');
+  updates.push('Updatedbyid = ?');
+  params.push(req.user.id);
+  params.push(locationId);
   try {
-    await db.query(
-      'UPDATE Clientlocations SET LocationName = ?, LocationAddress = ?, Updatedat = NOW(), Updatedbyid = ? WHERE ID = ? AND Deletedat IS NULL',
-      [LocationName, LocationAddress, req.user.id, locationId]
-    );
+    const sql = `UPDATE Clientlocations SET ${updates.join(', ')} WHERE ID = ? AND Deletedat IS NULL`;
+    await db.query(sql, params);
     res.status(200).json({ message: 'Client location updated' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update client location', error: err.message });
