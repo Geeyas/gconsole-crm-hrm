@@ -28,13 +28,20 @@ exports.createClient = async (req, res) => {
     const filteredFields = Object.entries(fields)
       .filter(([key, value]) => key && !systemFields.includes(key) && validColumns.includes(key) && value !== undefined && value !== null && key.trim() !== '')
       .reduce((obj, [key, value]) => { obj[key] = value; return obj; }, {});
-    const columns = ['Name', ...Object.keys(filteredFields), 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
+    // Always build columns/values arrays correctly
+    const extraColumns = Object.keys(filteredFields);
+    const columns = ['Name', ...extraColumns, 'Createdat', 'Createdbyid', 'Updatedat', 'Updatedbyid'];
     const placeholders = columns.map(() => '?');
-    const values = [Name, ...Object.values(filteredFields), req.user.id, req.user.id];
+    const values = [Name, ...extraColumns.map(k => filteredFields[k]), req.user.id, req.user.id];
+    if (columns.length !== values.length) {
+      return res.status(400).json({ message: 'Invalid payload: columns and values length mismatch' });
+    }
     const sql = `INSERT INTO Clients (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
     const [result] = await db.query(sql, values);
     res.status(201).json({ message: 'Client created', id: result.insertId });
   } catch (err) {
+    // Optionally log SQL and values for debugging
+    // console.error('SQL:', sql, 'VALUES:', values);
     res.status(500).json({ message: 'Failed to create client', error: err.message });
   }
 };
