@@ -63,9 +63,15 @@ exports.createClient = async (req, res) => {
     const validColumns = [
       'Additionalvalue', 'ABN', 'Industryid', 'Typeid', 'Clientuniqueid', 'Priorityid', 'Statusid', 'IsInactive', 'Logoattachmentid'
     ];
-    // Filter out system fields, fields with empty/undefined/null values, and only allow valid columns
+    // Filter out system fields, fields with empty/undefined values, and only allow valid columns
     const filteredFields = Object.entries(fields)
-      .filter(([key, value]) => key && !systemFields.includes(key) && validColumns.includes(key) && value !== undefined && value !== null && key.trim() !== '')
+      .filter(([key, value]) =>
+        key &&
+        !systemFields.includes(key) &&
+        validColumns.includes(key) &&
+        value !== undefined &&
+        key.trim() !== ''
+      )
       .reduce((obj, [key, value]) => { obj[key] = value; return obj; }, {});
     // Always build columns/values arrays correctly
     const extraColumns = Object.keys(filteredFields);
