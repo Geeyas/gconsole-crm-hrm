@@ -6,6 +6,40 @@ function isStaffOrAdmin(user) {
   return user && (user.usertype === 'System Admin' || user.usertype === 'Staff - Standard User');
 }
 
+// Helper: Validation rules for Clients fields
+const clientFieldValidators = {
+  Additionalvalue: { type: 'string', max: 255 },
+  ABN: { type: 'string', max: 32 },
+  Industryid: { type: 'integer' },
+  Typeid: { type: 'integer' },
+  Clientuniqueid: { type: 'string', max: 64 },
+  Priorityid: { type: 'integer' },
+  Statusid: { type: 'integer' },
+  IsInactive: { type: 'integer' },
+  Logoattachmentid: { type: 'integer' },
+};
+
+function validateClientFields(fields) {
+  for (const [key, value] of Object.entries(fields)) {
+    const rule = clientFieldValidators[key];
+    if (!rule) continue; // skip unknown fields (already filtered)
+    if (rule.type === 'integer') {
+      if (value !== null && value !== undefined && (typeof value !== 'number' || !Number.isInteger(value))) {
+        return `${key} must be an integer`;
+      }
+    }
+    if (rule.type === 'string') {
+      if (value !== null && value !== undefined && typeof value !== 'string') {
+        return `${key} must be a string`;
+      }
+      if (rule.max && typeof value === 'string' && value.length > rule.max) {
+        return `${key} must not exceed ${rule.max} characters`;
+      }
+    }
+  }
+  return null;
+}
+
 // ========== CLIENTS ==========
 
 // Create a new client
@@ -15,6 +49,11 @@ exports.createClient = async (req, res) => {
   }
   const { Name, ...fields } = req.body;
   if (!Name) return res.status(400).json({ message: 'Name is required' });
+  // Validate fields
+  const validationError = validateClientFields(fields);
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
+  }
   try {
     // List of system fields to ignore
     const systemFields = [
@@ -55,6 +94,11 @@ exports.updateClient = async (req, res) => {
   const { Name, ...fields } = req.body;
   if (!Name && Object.keys(fields).length === 0) {
     return res.status(400).json({ message: 'At least one field is required to update' });
+  }
+  // Validate fields
+  const validationError = validateClientFields(fields);
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
   }
   try {
     // Build dynamic SET clause
