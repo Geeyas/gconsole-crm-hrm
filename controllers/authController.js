@@ -540,6 +540,33 @@ exports.updateUserProfile = async (req, res) => {
 };
 // ================== end updateUserProfile ==================
 
+// ================== getMyPeopleInfo ==================
+// Returns all People table info for the logged-in user (from JWT)
+exports.getMyPeopleInfo = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: No user ID in token.' });
+    }
+    // Find the People record linked to this user
+    const [peopleRows] = await db.query('SELECT * FROM People WHERE Linkeduserid = ?', [userId]);
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'No People record found for this user.' });
+    }
+    // Optionally, filter out soft-deleted
+    const person = peopleRows[0];
+    const deletedAt = person.Deletedat || person.deletedat || person.DELETEDAT;
+    if (deletedAt !== null && deletedAt !== undefined && String(deletedAt).trim() !== '') {
+      return res.status(400).json({ message: 'This People record is soft-deleted.' });
+    }
+    res.status(200).json({ person });
+  } catch (err) {
+    logger.error('getMyPeopleInfo error', { error: err });
+    res.status(500).json({ message: 'Failed to fetch People info', error: err.message });
+  }
+};
+// ================== end getMyPeopleInfo ==================
+
 // ================== createClientShiftRequest ==================
 // Creates a new client shift request and related staff shifts.
 exports.createClientShiftRequest = async (req, res) => {
@@ -1539,6 +1566,7 @@ exports.updateClientShiftRequest = async (req, res) => {
     if (!updates.length) {
       return res.status(400).json({ message: 'No valid fields to update.' });
     }
+
     // Always update audit fields
     updates.push('Updatedat = ?');
     updates.push('Updatedbyid = ?');

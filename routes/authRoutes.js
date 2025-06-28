@@ -94,6 +94,9 @@ router.post('/unlink-client-user-specific-location', authenticate, authorizeStaf
 // Client: View only their assigned locations
 router.get('/my-client-locations', authenticate, authController.getMyClientLocations);
 
+// Get People info for the logged-in user (from JWT)
+router.get('/people/me', authenticate, authController.getMyPeopleInfo);
+
 router.put('/update-password', authenticate, authController.updatePassword);
 router.put('/people/:id', authenticate, authorizeManager, authController.updateUserProfile);
 
