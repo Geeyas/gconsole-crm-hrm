@@ -471,7 +471,6 @@ exports.updateUserProfile = async (req, res) => {
     BSB,
     Bankaccountnumber,
     SuperfundID,
-    Hiredate,
     AdditionalInformation
   } = req.body;
 
