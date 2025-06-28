@@ -311,8 +311,8 @@ exports.register = async (req, res) => {
     const fullname = `${firstname} ${lastname}`;
 
     const [peopleResult] = await db.query(
-      `INSERT INTO People (Firstname, Lastname, Emailaddress, Createdat, Createdbyid, Updatedat, Updatedbyid)
-       VALUES (?, ?, ?, NOW(), ?, NOW(), ?)`,
+      `INSERT INTO People (Firstname, Lastname, Emailaddress, Hiredate, Createdat, Createdbyid, Updatedat, Updatedbyid)
+       VALUES (?, ?, ?, NOW(), NOW(), ?, NOW(), ?)`,
       [firstname, lastname, email, creatorId, creatorId]
     );
 
@@ -442,22 +442,37 @@ exports.updateUserProfile = async (req, res) => {
   const personId = req.params.id;
   const updaterId = req.user?.id;
 
-  // Extract all fields for People table
+  // Extract all fields for People table (full schema)
   const {
     Firstname,
     Lastname,
     Middlename,
     Preferredname,
     Emailaddress,
+    Contact,
     Country,
     State,
     Suburb,
     Postcode,
     HomeAddress,
     Workaddress,
+    Phonemobile,
+    Phonehome,
+    Phonework,
+    Gender,
+    Issubcontractor,
+    Isaustraliantaxresident,
+    Isworkingholidaymarker,
+    Isterminated,
+    Hasvehicle,
+    Terminatedat,
     TFN,
+    ABN,
     BSB,
-    Bankaccountnumber
+    Bankaccountnumber,
+    SuperfundID,
+    Hiredate,
+    AdditionalInformation
   } = req.body;
 
   try {
@@ -473,18 +488,24 @@ exports.updateUserProfile = async (req, res) => {
     }
     const linkedUserId = personRows[0].Linkeduserid;
 
-    // Update People table
+    // Update People table with all fields
     await db.query(
       `UPDATE People SET
         Firstname = ?, Lastname = ?, Middlename = ?, Preferredname = ?, Emailaddress = ?, 
-        Country = ?, State = ?, Suburb = ?, Postcode = ?, HomeAddress = ?, Workaddress = ?, 
-        TFN = ?, BSB = ?, Bankaccountnumber = ?, 
+        Contact = ?, Country = ?, State = ?, Suburb = ?, Postcode = ?, HomeAddress = ?, Workaddress = ?,
+        Phonemobile = ?, Phonehome = ?, Phonework = ?, Gender = ?,
+        Issubcontractor = ?, Isaustraliantaxresident = ?, Isworkingholidaymarker = ?, Isterminated = ?, Hasvehicle = ?,
+        Terminatedat = ?, TFN = ?, ABN = ?, BSB = ?, Bankaccountnumber = ?, SuperfundID = ?, Hiredate = ?,
+        AdditionalInformation = ?,
         Updatedat = NOW(), Updatedbyid = ?
        WHERE ID = ?`,
       [
         Firstname, Lastname, Middlename, Preferredname, Emailaddress,
-        Country, State, Suburb, Postcode, HomeAddress, Workaddress,
-        TFN, BSB, Bankaccountnumber,
+        Contact, Country, State, Suburb, Postcode, HomeAddress, Workaddress,
+        Phonemobile, Phonehome, Phonework, Gender,
+        Issubcontractor, Isaustraliantaxresident, Isworkingholidaymarker, Isterminated, Hasvehicle,
+        Terminatedat, TFN, ABN, BSB, Bankaccountnumber, SuperfundID, Hiredate,
+        AdditionalInformation,
         updaterId, personId
       ]
     );
