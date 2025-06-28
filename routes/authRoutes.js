@@ -98,7 +98,7 @@ router.get('/my-client-locations', authenticate, authController.getMyClientLocat
 router.get('/people/me', authenticate, authController.getMyPeopleInfo);
 
 router.put('/update-password', authenticate, authController.updatePassword);
-router.put('/people/:id', authenticate, authorizeManager, authController.updateUserProfile);
+router.put('/people/:id', authenticate, authController.updateUserProfile);
 
 
 router.get('/user/:id/usertype', authController.getUsertypeByPersonId);
