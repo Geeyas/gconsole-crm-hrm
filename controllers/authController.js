@@ -494,7 +494,7 @@ exports.updateUserProfile = async (req, res) => {
         Contact = ?, Country = ?, State = ?, Suburb = ?, Postcode = ?, HomeAddress = ?, Workaddress = ?,
         Phonemobile = ?, Phonehome = ?, Phonework = ?, Gender = ?,
         Issubcontractor = ?, Isaustraliantaxresident = ?, Isworkingholidaymarker = ?, Isterminated = ?, Hasvehicle = ?,
-        Terminatedat = ?, TFN = ?, ABN = ?, BSB = ?, Bankaccountnumber = ?, SuperfundID = ?, Hiredate = ?,
+        Terminatedat = ?, TFN = ?, ABN = ?, BSB = ?, Bankaccountnumber = ?, SuperfundID = ?,
         AdditionalInformation = ?,
         Updatedat = NOW(), Updatedbyid = ?
        WHERE ID = ?`,
@@ -503,7 +503,7 @@ exports.updateUserProfile = async (req, res) => {
         Contact, Country, State, Suburb, Postcode, HomeAddress, Workaddress,
         Phonemobile, Phonehome, Phonework, Gender,
         Issubcontractor, Isaustraliantaxresident, Isworkingholidaymarker, Isterminated, Hasvehicle,
-        Terminatedat, TFN, ABN, BSB, Bankaccountnumber, SuperfundID, Hiredate,
+        Terminatedat, TFN, ABN, BSB, Bankaccountnumber, SuperfundID,
         AdditionalInformation,
         updaterId, personId
       ]
@@ -520,8 +520,22 @@ exports.updateUserProfile = async (req, res) => {
 
     res.status(200).json({ message: 'User profile updated successfully' });
   } catch (err) {
-    logger.error('Update error', { error: err });
-    res.status(500).json({ message: 'Failed to update profile', error: err.message });
+    // Improved error logging for debugging
+    logger.error('Update error', {
+      error: err,
+      message: err && err.message,
+      stack: err && err.stack,
+      sql: err && err.sql,
+      code: err && err.code,
+      full: JSON.stringify(err)
+    });
+    res.status(500).json({
+      message: 'Failed to update profile',
+      error: err && err.message,
+      stack: err && err.stack,
+      sql: err && err.sql,
+      code: err && err.code
+    });
   }
 };
 // ================== end updateUserProfile ==================
