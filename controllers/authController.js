@@ -1,3 +1,159 @@
+// ================== unlinkClientUserFromSpecificLocationByEmail ==================
+// Staff/admin: Unlink a client user (by email) from a specific client location (by locationid) using Userclients table
+exports.unlinkClientUserFromSpecificLocationByEmail = async (req, res) => {
+  const requesterType = req.user?.usertype;
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
+  }
+  const { emailaddress, locationid } = req.body;
+  if (!emailaddress || !locationid) {
+    return res.status(400).json({ message: 'Missing emailaddress or locationid in request body.' });
+  }
+  try {
+    // Find the user by email and check usertype
+    const [userRows] = await db.query(
+      `SELECT u.id, ut.Name as usertype FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.email = ?`, [emailaddress]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+    // Check if location exists and get clientid
+    const [locRows] = await db.query('SELECT * FROM Clientlocations WHERE ID = ?', [locationid]);
+    if (!locRows.length) {
+      return res.status(400).json({ message: 'Invalid locationid.' });
+    }
+    const clientid = locRows[0].Clientid;
+    // Check if link exists
+    const [existing] = await db.query(
+      'SELECT * FROM Userclients WHERE userid = ? AND clientid = ? AND clientlocationid = ?',
+      [user.id, clientid, locationid]
+    );
+    if (!existing.length) {
+      return res.status(404).json({ message: 'User is not linked to this location.' });
+    }
+    // Unlink user from location
+    await db.query(
+      'DELETE FROM Userclients WHERE userid = ? AND clientid = ? AND clientlocationid = ?',
+      [user.id, clientid, locationid]
+    );
+    res.status(200).json({ message: 'User unlinked from location successfully.' });
+  } catch (err) {
+    logger.error('Unlink client user from specific location by email error', { error: err });
+    res.status(500).json({ message: 'Error unlinking client user from location', error: err });
+  }
+};
+// ================== end unlinkClientUserFromSpecificLocationByEmail ==================
+// ================== unlinkClientUserFromSpecificLocationByEmail ==================
+// Staff/admin: Unlink a client user (by email) from a specific client location (by locationid) using Userclients table
+exports.unlinkClientUserFromSpecificLocationByEmail = async (req, res) => {
+  const requesterType = req.user?.usertype;
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
+  }
+  const { emailaddress, locationid } = req.body;
+  if (!emailaddress || !locationid) {
+    return res.status(400).json({ message: 'Missing emailaddress or locationid in request body.' });
+  }
+  try {
+    // Find the user by email and check usertype
+    const [userRows] = await db.query(
+      `SELECT u.id, ut.Name as usertype FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.email = ?`, [emailaddress]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+    // Check if location exists and get clientid
+    const [locRows] = await db.query('SELECT * FROM Clientlocations WHERE ID = ?', [locationid]);
+    if (!locRows.length) {
+      return res.status(400).json({ message: 'Invalid locationid.' });
+    }
+    const clientid = locRows[0].Clientid;
+    // Check if link exists
+    const [existing] = await db.query(
+      'SELECT * FROM Userclients WHERE userid = ? AND clientid = ? AND clientlocationid = ?',
+      [user.id, clientid, locationid]
+    );
+    if (!existing.length) {
+      return res.status(404).json({ message: 'User is not linked to this location.' });
+    }
+    // Unlink user from location (delete Userclients row)
+    await db.query(
+      'DELETE FROM Userclients WHERE userid = ? AND clientid = ? AND clientlocationid = ?',
+      [user.id, clientid, locationid]
+    );
+    res.status(200).json({ message: 'User unlinked from location successfully.' });
+  } catch (err) {
+    logger.error('Unlink client user from specific location by email error', { error: err });
+    res.status(500).json({ message: 'Error unlinking client user from location', error: err });
+  }
+};
+// ================== end unlinkClientUserFromSpecificLocationByEmail ==================
+// ================== linkClientUserToSpecificLocationByEmail ==================
+// Staff/admin: Link a client user (by email) to a specific client location (by locationid) using Userclients table
+exports.linkClientUserToSpecificLocationByEmail = async (req, res) => {
+  const requesterType = req.user?.usertype;
+  if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
+  }
+  const { emailaddress, locationid } = req.body;
+  if (!emailaddress || !locationid) {
+    return res.status(400).json({ message: 'Missing emailaddress or locationid in request body.' });
+  }
+  try {
+    // Find the user by email and check usertype
+    const [userRows] = await db.query(
+      `SELECT u.id, ut.Name as usertype FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       WHERE u.email = ?`, [emailaddress]
+    );
+    if (!userRows.length) {
+      return res.status(404).json({ message: 'User not found with the provided email address.' });
+    }
+    const user = userRows[0];
+    if (user.usertype !== 'Client - Standard User') {
+      return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
+    }
+    // Check if location exists and get clientid
+    const [locRows] = await db.query('SELECT * FROM Clientlocations WHERE ID = ?', [locationid]);
+    if (!locRows.length) {
+      return res.status(400).json({ message: 'Invalid locationid.' });
+    }
+    const clientid = locRows[0].Clientid;
+    // Check if already linked (Userclients table, with location)
+    const [existing] = await db.query(
+      'SELECT * FROM Userclients WHERE userid = ? AND clientid = ? AND clientlocationid = ?',
+      [user.id, clientid, locationid]
+    );
+    if (existing.length) {
+      return res.status(200).json({ message: 'User is already linked to this location.' });
+    }
+    // Link user to location (Userclients row with clientlocationid)
+    await db.query(
+      'INSERT INTO Userclients (userid, clientid, clientlocationid) VALUES (?, ?, ?)',
+      [user.id, clientid, locationid]
+    );
+    res.status(201).json({ message: 'User linked to location successfully.' });
+  } catch (err) {
+    logger.error('Link client user to specific location by email error', { error: err });
+    res.status(500).json({ message: 'Error linking client user to location', error: err });
+  }
+};
+// ================== end linkClientUserToSpecificLocationByEmail ==================
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
 const { hashPassword, generateSalt } = require('../utils/hashUtils');

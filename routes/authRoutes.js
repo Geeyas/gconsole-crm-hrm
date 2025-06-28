@@ -78,6 +78,19 @@ router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, l
   return authController.linkClientUserToLocation(req, res, next);
 });
 
+
+// Staff/Admin: Link a client user to a specific location (by email and locationid)
+router.post('/link-client-user-specific-location', authenticate, authorizeStaffOrAdmin, (req, res, next) => {
+  // Optionally, add validation here if needed
+  return authController.linkClientUserToSpecificLocationByEmail(req, res, next);
+});
+
+// Staff/Admin: Unlink a client user from a specific location (by email and locationid)
+router.post('/unlink-client-user-specific-location', authenticate, authorizeStaffOrAdmin, (req, res, next) => {
+  // Optionally, add validation here if needed
+  return authController.unlinkClientUserFromSpecificLocationByEmail(req, res, next);
+});
+
 // Client: View only their assigned locations
 router.get('/my-client-locations', authenticate, authController.getMyClientLocations);
 
