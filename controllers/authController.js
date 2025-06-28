@@ -441,6 +441,34 @@ exports.getUsertypeByPersonId = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   const personId = req.params.id;
   const updaterId = req.user?.id;
+  const updaterType = req.user?.usertype;
+
+  // Check if person exists in People table
+  let personRows;
+  try {
+    [personRows] = await db.query(`SELECT * FROM People WHERE ID = ?`, [personId]);
+  } catch (err) {
+    logger.error('DB error fetching People for updateUserProfile', { error: err });
+    return res.status(500).json({ message: 'Database error', error: err.message });
+  }
+  if (!personRows.length) {
+    return res.status(404).json({ message: 'User not found in People table' });
+  }
+  const person = personRows[0];
+  const deletedAt = person.Deletedat || person.deletedat || person.DELETEDAT;
+  if (deletedAt !== null && deletedAt !== undefined && String(deletedAt).trim() !== '') {
+    return res.status(400).json({ message: 'Cannot update a soft-deleted person.' });
+  }
+  const linkedUserId = person.Linkeduserid;
+
+  // Authorization logic: allow if staff/admin, or if user is updating their own record
+  if (
+    updaterId !== linkedUserId &&
+    updaterType !== 'Staff - Standard User' &&
+    updaterType !== 'System Admin'
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can update this record.' });
+  }
 
   // Extract all fields for People table (full schema)
   const {
@@ -475,18 +503,6 @@ exports.updateUserProfile = async (req, res) => {
   } = req.body;
 
   try {
-    // Check if person exists in People table
-    const [personRows] = await db.query(`SELECT * FROM People WHERE ID = ?`, [personId]);
-    if (personRows.length === 0) {
-      return res.status(404).json({ message: 'User not found in People table' });
-    }
-    // Print type and value for deletedAt for deep debugging
-    const deletedAt = personRows[0].Deletedat || personRows[0].deletedat || personRows[0].DELETEDAT;
-    if (deletedAt !== null && deletedAt !== undefined && String(deletedAt).trim() !== '') {
-      return res.status(400).json({ message: 'Cannot update a soft-deleted person.' });
-    }
-    const linkedUserId = personRows[0].Linkeduserid;
-
     // Update People table with all fields
     await db.query(
       `UPDATE People SET
@@ -726,7 +742,7 @@ exports.linkClientUserToLocation = async (req, res) => {
 
   // Only Staff - Standard User or System Admin can use this endpoint
   if (requesterType !== 'Staff - Standard User' && requesterType !== 'System Admin') {
-    return res.status(403).json({ message: 'Access denied: Only staff or admin can link users to clients.' });
+    return res.status(403).json({ message: 'Access denied: Only staff or admin can use this endpoint.' });
   }
 
   try {

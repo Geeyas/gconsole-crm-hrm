@@ -21,7 +21,7 @@ const authenticate = async (req, res, next) => {
       if (!rows.length) return res.status(401).json({ message: 'User not found. Please log in again.', code: 'USER_NOT_FOUND' });
       const userUpdatedAt = new Date(rows[0].updatedat).getTime() / 1000; // seconds
       if (decoded.iat && userUpdatedAt > decoded.iat) {
-        return res.status(401).json({ message: 'Session invalid due to password change. Please log in again.', code: 'TOKEN_PASSWORD_CHANGED' });
+        return res.status(401).json({ message: 'Session invalid. Please log in again.', code: 'TOKEN_PASSWORD_CHANGED' });
       }
       req.user = decoded; // Adds the decoded user data to the request
       // Do not reject here for unknown usertype; let controller handle it
