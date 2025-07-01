@@ -1119,7 +1119,9 @@ exports.getAvailableClientShifts = async (req, res) => {
         }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
-      // For Employee - Standard User: See only open staff shift slots (not assigned)
+      // For Employee - Standard User: Show only one open slot per shift, and hide shifts where user is already assigned
+      // 1. Exclude shifts where this employee is already assigned to any slot (pending/approved/open)
+      // 2. For each shift, show only one open slot (lowest id)
       const [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
@@ -1129,11 +1131,25 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         WHERE css.Status = 'open' AND css.Deletedat IS NULL
-        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-        LIMIT ? OFFSET ?
-      `, [limit, offset]);
+          AND css.Clientshiftrequestid NOT IN (
+            SELECT Clientshiftrequestid FROM Clientstaffshifts
+            WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
+          )
+        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
+      `, [userId]);
+
+      // Group by shiftrequestid, pick only the first open slot per shift
+      const seenShiftIds = new Set();
+      const uniqueRows = [];
+      for (const row of rows) {
+        if (!seenShiftIds.has(row.Clientshiftrequestid)) {
+          uniqueRows.push(row);
+          seenShiftIds.add(row.Clientshiftrequestid);
+        }
+      }
+
       // Fetch qualifications for all qualificationgroupids
-      const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+      const groupIds = [...new Set(uniqueRows.map(r => r.Qualificationgroupid).filter(Boolean))];
       let qualMap = {};
       if (groupIds.length) {
         const [qualRows] = await db.query(
@@ -1148,7 +1164,7 @@ exports.getAvailableClientShifts = async (req, res) => {
           return acc;
         }, {});
       }
-      const formatted = rows.map(row => ({
+      const formatted = uniqueRows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
