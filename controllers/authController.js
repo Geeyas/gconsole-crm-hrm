@@ -31,12 +31,12 @@ exports.addQualificationToEmployee = async (req, res) => {
       return res.status(404).json({ message: 'Qualification not found.' });
     }
     // Check if already linked
-    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE PersonID = ? AND QualificationID = ?', [personId, qualificationId]);
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
     if (existing.length) {
       return res.status(409).json({ message: 'Qualification already assigned to this person.' });
     }
     // Insert link
-    await db.query('INSERT INTO Staffqualifications (PersonID, QualificationID, Createdat, Createdbyid) VALUES (?, ?, NOW(), ?)', [personId, qualificationId, requesterId]);
+    await db.query('INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid) VALUES (?, ?, NOW(), ?)', [personId, qualificationId, requesterId]);
     return res.status(201).json({ message: 'Qualification added to employee.' });
   } catch (err) {
     logger.error('Add qualification to employee error', { error: err });
