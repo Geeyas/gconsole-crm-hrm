@@ -1,3 +1,49 @@
+// ================== removeQualificationFromEmployee ==================
+// Removes a qualification from an employee (person) by deleting from Staffqualifications
+exports.removeQualificationFromEmployee = async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const qualificationId = parseInt(req.params.qualificationId, 10);
+  const requesterType = req.user?.usertype;
+  const requesterId = req.user?.id;
+
+  // Only staff/admin or the user themselves can remove
+  if (
+    requesterType !== 'Staff - Standard User' &&
+    requesterType !== 'System Admin' &&
+    requesterId !== personId // allow self-remove if user is the person
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can remove qualifications.' });
+  }
+
+  if (!personId || !qualificationId) {
+    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  }
+
+  try {
+    // Check if person exists
+    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
+    if (!personRows.length) {
+      return res.status(404).json({ message: 'Person not found.' });
+    }
+    // Check if qualification exists
+    const [qualRows] = await db.query('SELECT * FROM Qualifications WHERE ID = ?', [qualificationId]);
+    if (!qualRows.length) {
+      return res.status(404).json({ message: 'Qualification not found.' });
+    }
+    // Check if link exists
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
+    if (!existing.length) {
+      return res.status(404).json({ message: 'Qualification is not assigned to this person.' });
+    }
+    // Delete the link
+    await db.query('DELETE FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
+    return res.status(200).json({ message: 'Qualification removed from employee.' });
+  } catch (err) {
+    logger.error('Remove qualification from employee error', { error: err });
+    return res.status(500).json({ message: 'Failed to remove qualification.', error: err.message });
+  }
+};
+// ================== end removeQualificationFromEmployee ==================
 // ================== addQualificationToEmployee ==================
 // Adds a qualification to an employee (person) by inserting into Staffqualifications
 exports.addQualificationToEmployee = async (req, res) => {
