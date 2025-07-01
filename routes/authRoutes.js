@@ -99,8 +99,12 @@ router.get('/people/me', authenticate, authController.getMyPeopleInfo);
 
 router.put('/update-password', authenticate, authController.updatePassword);
 
+
 // Add qualification to an employee (self or staff/admin)
 router.post('/people/:id/qualifications', authenticate, authController.addQualificationToEmployee);
+
+// Get all qualifications assigned to a person (People.ID)
+router.get('/people/:id/qualifications', authenticate, authController.getQualificationsForEmployee);
 
 router.put('/people/:id', authenticate, authController.updateUserProfile);
 

@@ -35,8 +35,11 @@ exports.addQualificationToEmployee = async (req, res) => {
     if (existing.length) {
       return res.status(409).json({ message: 'Qualification already assigned to this person.' });
     }
-    // Insert link
-    await db.query('INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid) VALUES (?, ?, NOW(), ?)', [personId, qualificationId, requesterId]);
+    // Insert link (fill all required columns)
+    await db.query(
+      'INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, ?, NOW(), ?, NOW(), ?)',
+      [personId, qualificationId, requesterId, requesterId]
+    );
     return res.status(201).json({ message: 'Qualification added to employee.' });
   } catch (err) {
     logger.error('Add qualification to employee error', { error: err });
@@ -44,6 +47,44 @@ exports.addQualificationToEmployee = async (req, res) => {
   }
 };
 // ================== end addQualificationToEmployee ==================
+
+// ================== getQualificationsForEmployee ==================
+// Returns all qualifications assigned to a person (People.ID)
+exports.getQualificationsForEmployee = async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const requesterType = req.user?.usertype;
+  const requesterId = req.user?.id;
+
+  // Only staff/admin or the user themselves can view
+  if (
+    requesterType !== 'Staff - Standard User' &&
+    requesterType !== 'System Admin' &&
+    requesterId !== personId // allow self-view if user is the person
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can view qualifications.' });
+  }
+
+  try {
+    // Check if person exists
+    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
+    if (!personRows.length) {
+      return res.status(404).json({ message: 'Person not found.' });
+    }
+    // Get all qualifications for this person
+    const [qualRows] = await db.query(
+      `SELECT q.ID, q.Name, q.Description, sq.Createdat, sq.Updatedat
+       FROM Staffqualifications sq
+       JOIN Qualifications q ON sq.QualificationID = q.ID
+       WHERE sq.Userid = ?`,
+      [personId]
+    );
+    return res.status(200).json({ qualifications: qualRows });
+  } catch (err) {
+    logger.error('Get qualifications for employee error', { error: err });
+    return res.status(500).json({ message: 'Failed to fetch qualifications.', error: err.message });
+  }
+};
+// ================== end getQualificationsForEmployee ==================
 // ================== unlinkClientUserFromSpecificLocationByEmail ==================
 // Staff/admin: Unlink a client user (by email) from a specific client location (by locationid) using Userclients table
 exports.unlinkClientUserFromSpecificLocationByEmail = async (req, res) => {
