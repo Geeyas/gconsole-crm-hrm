@@ -98,6 +98,10 @@ router.get('/my-client-locations', authenticate, authController.getMyClientLocat
 router.get('/people/me', authenticate, authController.getMyPeopleInfo);
 
 router.put('/update-password', authenticate, authController.updatePassword);
+
+// Add qualification to an employee (self or staff/admin)
+router.post('/people/:id/qualifications', authenticate, authController.addQualificationToEmployee);
+
 router.put('/people/:id', authenticate, authController.updateUserProfile);
 
 

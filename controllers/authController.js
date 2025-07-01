@@ -1,3 +1,49 @@
+// ================== addQualificationToEmployee ==================
+// Adds a qualification to an employee (person) by inserting into Staffqualifications
+exports.addQualificationToEmployee = async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const qualificationId = parseInt(req.body.qualificationId, 10);
+  const requesterType = req.user?.usertype;
+  const requesterId = req.user?.id;
+
+  // Only staff/admin or the user themselves can add (optional: adjust as needed)
+  if (
+    requesterType !== 'Staff - Standard User' &&
+    requesterType !== 'System Admin' &&
+    requesterId !== personId // allow self-add if user is the person
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can add qualifications.' });
+  }
+
+  if (!personId || !qualificationId) {
+    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  }
+
+  try {
+    // Check if person exists
+    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
+    if (!personRows.length) {
+      return res.status(404).json({ message: 'Person not found.' });
+    }
+    // Check if qualification exists
+    const [qualRows] = await db.query('SELECT * FROM Qualifications WHERE ID = ?', [qualificationId]);
+    if (!qualRows.length) {
+      return res.status(404).json({ message: 'Qualification not found.' });
+    }
+    // Check if already linked
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE PersonID = ? AND QualificationID = ?', [personId, qualificationId]);
+    if (existing.length) {
+      return res.status(409).json({ message: 'Qualification already assigned to this person.' });
+    }
+    // Insert link
+    await db.query('INSERT INTO Staffqualifications (PersonID, QualificationID, Createdat, Createdbyid) VALUES (?, ?, NOW(), ?)', [personId, qualificationId, requesterId]);
+    return res.status(201).json({ message: 'Qualification added to employee.' });
+  } catch (err) {
+    logger.error('Add qualification to employee error', { error: err });
+    return res.status(500).json({ message: 'Failed to add qualification.', error: err.message });
+  }
+};
+// ================== end addQualificationToEmployee ==================
 // ================== unlinkClientUserFromSpecificLocationByEmail ==================
 // Staff/admin: Unlink a client user (by email) from a specific client location (by locationid) using Userclients table
 exports.unlinkClientUserFromSpecificLocationByEmail = async (req, res) => {
