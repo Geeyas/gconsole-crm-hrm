@@ -1,3 +1,5 @@
+// Remove a qualification from an employee (self or staff/admin)
+router.delete('/people/:id/qualifications/:qualificationId', authenticate, authController.removeQualificationFromEmployee);
 // routes/authRoutes.js
 const express = require('express');
 const router = express.Router();

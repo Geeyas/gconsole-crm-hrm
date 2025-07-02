@@ -39,9 +39,9 @@ const limiter = rateLimit({
 // CORS configuration for specific domains
 const corsOptions = {
   origin: [
-    'https://workforce-mgmt-61603.web.app',
-    'https://workforce-mgmt-61603.firebaseapp.com',
-    'https://hrm.ygit.tech',
+    // 'https://workforce-mgmt-61603.web.app',
+    // 'https://workforce-mgmt-61603.firebaseapp.com',
+    // 'https://hrm.ygit.tech',
     'http://localhost:4200',
     'https://rostermatic.netlify.app/',
     'https://rostermatic-b2ae0.web.app/',
