@@ -1,6 +1,4 @@
-// Remove a qualification from an employee (self or staff/admin)
-router.delete('/people/:id/qualifications/:qualificationId', authenticate, authController.removeQualificationFromEmployee);
-// routes/authRoutes.js
+// ...existing code...
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
@@ -10,13 +8,13 @@ const { validationResult } = require('express-validator');
 console.log('authController object in authRoutes immediately after require:', authController);
 console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
 
-const { 
-  authenticate, 
-  authorizeManager, 
-  authorizeClient, 
-  authorizeStaffOrAdmin, 
-  authorizeAdmin, 
-  authorizeClientOrStaffOrAdmin 
+const {
+  authenticate,
+  authorizeManager,
+  authorizeClient,
+  authorizeStaffOrAdmin,
+  authorizeAdmin,
+  authorizeClientOrStaffOrAdmin
 } = require('../middleware/authMiddleware');
 
 // Sanity check for middleware imports
@@ -71,6 +69,12 @@ router.delete('/clientshiftrequests/:id', authenticate, (req, res, next) => {
   // Only creator or staff/admin can delete; logic enforced in controller
   return authController.deleteClientShiftRequest(req, res, next);
 });
+// Remove a qualification from an employee (self or staff/admin)
+router.delete('/people/:id/qualifications/:qualificationId', authenticate, (req, res, next) => {
+  // Only self or staff/admin can remove; logic enforced in controller
+  return authController.removeQualificationFromEmployee(req, res, next);
+});
+
 // Route to link a client user to a location
 router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, linkClientUserValidation, (req, res, next) => {
   const errors = validationResult(req);
