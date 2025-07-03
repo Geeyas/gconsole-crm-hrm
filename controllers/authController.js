@@ -30,14 +30,14 @@ exports.removeQualificationFromEmployee = async (req, res) => {
     if (!qualRows.length) {
       return res.status(404).json({ message: 'Qualification not found.' });
     }
-    // Check if link exists
-    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
+    // Check if link exists and not already soft deleted
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL', [personId, qualificationId]);
     if (!existing.length) {
-      return res.status(404).json({ message: 'Qualification is not assigned to this person.' });
+      return res.status(404).json({ message: 'Qualification is not assigned to this person or already removed.' });
     }
-    // Delete the link
-    await db.query('DELETE FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
-    return res.status(200).json({ message: 'Qualification removed from employee.' });
+    // Soft delete: set Deletedat and Deletedbyid
+    await db.query('UPDATE Staffqualifications SET Deletedat = NOW(), Deletedbyid = ? WHERE Userid = ? AND QualificationID = ?', [requesterId, personId, qualificationId]);
+    return res.status(200).json({ message: 'Qualification removed (soft deleted) from employee.' });
   } catch (err) {
     logger.error('Remove qualification from employee error', { error: err });
     return res.status(500).json({ message: 'Failed to remove qualification.', error: err.message });

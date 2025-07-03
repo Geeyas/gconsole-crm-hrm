@@ -29,9 +29,9 @@ const logger = winston.createLogger({
 
 // Rate limiting middleware (100 requests per 15 minutes per IP)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 5 * 60 * 1000, // 5 minutes
   max: 100,
-  message: { message: 'Too many requests, please try again later.' },
+  message: { message: 'Too many requests, try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
