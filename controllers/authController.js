@@ -1213,9 +1213,9 @@ exports.getAvailableClientShifts = async (req, res) => {
           return acc;
         }, {});
       }
-      // Format output
-      const formatted = rows
-        .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
+      // Show all shifts (no date filter)
+      const filteredRows = rows.filter(row => !row.Deletedat);
+      const formatted = filteredRows
         .map(row => ({
           ...row,
           Shiftdate: formatDate(row.Shiftdate),
@@ -1968,59 +1968,48 @@ exports.deleteClientShiftRequest = async (req, res) => {
 // ================== end deleteClientShiftRequest ==================
 
 // ================== getMyShifts ==================
-// Returns all shifts accepted, assigned, or rejected for the logged-in employee
+// Returns all shifts assigned to the logged-in user (employee)
 exports.getMyShifts = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
-  if (userType !== 'Employee - Standard User') {
-    return res.status(403).json({ message: 'Access denied: Employees only' });
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized: No user ID in token.' });
+  }
   try {
-    // Only show shifts for today or in the future
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    // Get all staff shifts assigned to this user, status pending approval, approved, or rejected, and not in the past
-    const [rows] = await db.query(`
-      SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
-             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
-             cl.LocationName, cl.LocationAddress, c.Name AS clientname
-      FROM Clientstaffshifts css
-      LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
-      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-      LEFT JOIN Clients c ON cl.clientid = c.id
-      WHERE css.Assignedtouserid = ?
-        AND css.Status IN ('pending approval', 'approved', 'rejected')
-        AND css.Deletedat IS NULL
-        AND csr.Shiftdate >= ?
-      ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-    `, [userId, formatDate(today)]);
-    // Fetch qualifications for all qualificationgroupids
-    const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
-    let qualMap = {};
-    if (groupIds.length) {
-      const [qualRows] = await db.query(
-        `SELECT qgi.Qualificationgroupid, q.Name
-         FROM Qualificationgroupitems qgi
-         JOIN Qualifications q ON qgi.Qualificationid = q.ID
-         WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
-        groupIds
-      );
-      qualMap = groupIds.reduce((acc, gid) => {
-        acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
-        return acc;
-      }, {});
+    // Only employees, staff, or admin can view their shifts
+    if (
+      userType !== 'Employee - Standard User' &&
+      userType !== 'Staff - Standard User' &&
+      userType !== 'System Admin'
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can view their shifts.' });
     }
-    const formatted = rows.map(row => ({
-      ...row,
-      Shiftdate: formatDate(row.Shiftdate),
-      Starttime: formatDateTime(row.Starttime),
-      Endtime: formatDateTime(row.Endtime),
-      qualificationname: qualMap[row.Qualificationgroupid] || []
+
+    // Get all client staff shifts assigned to this user, not soft-deleted
+    const [shifts] = await db.query(
+      `SELECT css.*, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name AS clientname, 
+              qg.Name AS qualificationgroupname
+       FROM Clientstaffshifts css
+       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.ID
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
+       LEFT JOIN Clients c ON cl.clientid = c.ID
+       LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
+       WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL
+       ORDER BY csr.Shiftdate DESC, csr.Starttime DESC`,
+      [userId]
+    );
+
+    // Format dates for frontend
+    const formatted = shifts.map(s => ({
+      ...s,
+      Shiftdate: s.Shiftdate ? formatDate(s.Shiftdate) : null,
+      Starttime: s.Starttime ? formatDateTime(s.Starttime) : null,
+      Endtime: s.Endtime ? formatDateTime(s.Endtime) : null
     }));
-    res.status(200).json({ myShifts: formatted });
+    return res.status(200).json({ myShifts: formatted });
   } catch (err) {
     logger.error('Get my shifts error', { error: err });
-    res.status(500).json({ message: 'Error fetching my shifts', error: err });
-  }
+    return res.status(500).json({ message: 'Failed to fetch shifts.', error: err.message });
   }
 };
 // ================== end getMyShifts ==================
