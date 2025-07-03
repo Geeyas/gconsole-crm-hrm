@@ -1,42 +1,51 @@
 // ================== removeQualificationFromEmployee ==================
 // Removes a qualification from an employee (person) by deleting from Staffqualifications
 exports.removeQualificationFromEmployee = async (req, res) => {
-  const personId = parseInt(req.params.id, 10);
+  const idParam = parseInt(req.params.id, 10);
   const qualificationId = parseInt(req.params.qualificationId, 10);
   const requesterType = req.user?.usertype;
   const requesterId = req.user?.id;
 
-  // Only staff/admin or the user themselves can remove
-  if (
-    requesterType !== 'Staff - Standard User' &&
-    requesterType !== 'System Admin' &&
-    requesterId !== personId // allow self-remove if user is the person
-  ) {
-    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can remove qualifications.' });
-  }
-
-  if (!personId || !qualificationId) {
-    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  if (!idParam || !qualificationId) {
+    return res.status(400).json({ message: 'Missing person/user id or qualificationId.' });
   }
 
   try {
-    // Check if person exists
-    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
-    if (!personRows.length) {
-      return res.status(404).json({ message: 'Person not found.' });
+    // Find People record by ID or Linkeduserid, not soft-deleted
+    const [peopleRows] = await db.query(
+      `SELECT * FROM People WHERE (ID = ? OR Linkeduserid = ?) AND Deletedat IS NULL`,
+      [idParam, idParam]
+    );
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'No People record found for this id (as ID or Linkeduserid).' });
     }
+    const person = peopleRows[0];
+    const userId = person.Linkeduserid;
+    if (!userId) {
+      return res.status(400).json({ message: 'No Linkeduserid found for this person.' });
+    }
+
+    // Only staff/admin or the user themselves can remove
+    if (
+      requesterType !== 'Staff - Standard User' &&
+      requesterType !== 'System Admin' &&
+      requesterId !== userId // allow self-remove if user is the linked user
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can remove qualifications.' });
+    }
+
     // Check if qualification exists
     const [qualRows] = await db.query('SELECT * FROM Qualifications WHERE ID = ?', [qualificationId]);
     if (!qualRows.length) {
       return res.status(404).json({ message: 'Qualification not found.' });
     }
     // Check if link exists and not already soft deleted
-    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL', [personId, qualificationId]);
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL', [userId, qualificationId]);
     if (!existing.length) {
-      return res.status(404).json({ message: 'Qualification is not assigned to this person or already removed.' });
+      return res.status(404).json({ message: 'Qualification is not assigned to this user or already removed.' });
     }
     // Soft delete: set Deletedat and Deletedbyid
-    await db.query('UPDATE Staffqualifications SET Deletedat = NOW(), Deletedbyid = ? WHERE Userid = ? AND QualificationID = ?', [requesterId, personId, qualificationId]);
+    await db.query('UPDATE Staffqualifications SET Deletedat = NOW(), Deletedbyid = ? WHERE Userid = ? AND QualificationID = ?', [requesterId, userId, qualificationId]);
     return res.status(200).json({ message: 'Qualification removed (soft deleted) from employee.' });
   } catch (err) {
     logger.error('Remove qualification from employee error', { error: err });
@@ -47,49 +56,59 @@ exports.removeQualificationFromEmployee = async (req, res) => {
 // ================== addQualificationToEmployee ==================
 // Adds a qualification to an employee (person) by inserting into Staffqualifications
 exports.addQualificationToEmployee = async (req, res) => {
-  const personId = parseInt(req.params.id, 10);
+  const idParam = parseInt(req.params.id, 10);
   const qualificationId = parseInt(req.body.qualificationId, 10);
   const requesterType = req.user?.usertype;
   const requesterId = req.user?.id;
 
-  // Only staff/admin or the user themselves can add (optional: adjust as needed)
-  if (
-    requesterType !== 'Staff - Standard User' &&
-    requesterType !== 'System Admin' &&
-    requesterId !== personId // allow self-add if user is the person
-  ) {
-    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can add qualifications.' });
-  }
-
-  if (!personId || !qualificationId) {
-    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  if (!idParam || !qualificationId) {
+    return res.status(400).json({ message: 'Missing person/user id or qualificationId.' });
   }
 
   try {
-    // Check if person exists
-    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
-    if (!personRows.length) {
-      return res.status(404).json({ message: 'Person not found.' });
+    // Find People record by ID or Linkeduserid, not soft-deleted
+    const [peopleRows] = await db.query(
+      `SELECT * FROM People WHERE (ID = ? OR Linkeduserid = ?) AND Deletedat IS NULL`,
+      [idParam, idParam]
+    );
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'No People record found for this id (as ID or Linkeduserid).' });
     }
+    const person = peopleRows[0];
+    const userId = person.Linkeduserid;
+    if (!userId) {
+      return res.status(400).json({ message: 'No Linkeduserid found for this person.' });
+    }
+
+    // Only staff/admin or the user themselves can add
+    if (
+      requesterType !== 'Staff - Standard User' &&
+      requesterType !== 'System Admin' &&
+      requesterId !== userId // allow self-add if user is the linked user
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can add qualifications.' });
+    }
+
     // Check if qualification exists
     const [qualRows] = await db.query('SELECT * FROM Qualifications WHERE ID = ?', [qualificationId]);
     if (!qualRows.length) {
       return res.status(404).json({ message: 'Qualification not found.' });
     }
+
     // Check if already linked (including soft deleted)
-    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [userId, qualificationId]);
     if (existing.length) {
       // If the only existing link is soft deleted, allow re-adding by inserting a new row
       const notDeleted = existing.find(e => !e.Deletedat);
       if (notDeleted) {
-        return res.status(409).json({ message: 'Qualification already assigned to this person.' });
+        return res.status(409).json({ message: 'Qualification already assigned to this user.' });
       }
       // else, allow re-adding (insert new row)
     }
     // Insert link (fill all required columns)
     await db.query(
       'INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, ?, NOW(), ?, NOW(), ?)',
-      [personId, qualificationId, requesterId, requesterId]
+      [userId, qualificationId, requesterId, requesterId]
     );
     return res.status(201).json({ message: 'Qualification added to employee.' });
   } catch (err) {
@@ -102,32 +121,45 @@ exports.addQualificationToEmployee = async (req, res) => {
 // ================== getQualificationsForEmployee ==================
 // Returns all qualifications assigned to a person (People.ID)
 exports.getQualificationsForEmployee = async (req, res) => {
-  const personId = parseInt(req.params.id, 10);
+  const idParam = parseInt(req.params.id, 10);
   const requesterType = req.user?.usertype;
   const requesterId = req.user?.id;
 
-  // Only staff/admin or the user themselves can view
-  if (
-    requesterType !== 'Staff - Standard User' &&
-    requesterType !== 'System Admin' &&
-    requesterId !== personId // allow self-view if user is the person
-  ) {
-    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can view qualifications.' });
+  if (!idParam) {
+    return res.status(400).json({ message: 'Missing person/user id.' });
   }
 
   try {
-    // Check if person exists
-    const [personRows] = await db.query('SELECT * FROM People WHERE ID = ?', [personId]);
-    if (!personRows.length) {
-      return res.status(404).json({ message: 'Person not found.' });
+    // Find People record by ID or Linkeduserid, not soft-deleted
+    const [peopleRows] = await db.query(
+      `SELECT * FROM People WHERE (ID = ? OR Linkeduserid = ?) AND Deletedat IS NULL`,
+      [idParam, idParam]
+    );
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'No People record found for this id (as ID or Linkeduserid).' });
     }
-    // Get all qualifications for this person, excluding soft deleted
+    const person = peopleRows[0];
+    const userId = person.Linkeduserid;
+    if (!userId) {
+      return res.status(400).json({ message: 'No Linkeduserid found for this person.' });
+    }
+
+    // Only staff/admin or the user themselves can view
+    if (
+      requesterType !== 'Staff - Standard User' &&
+      requesterType !== 'System Admin' &&
+      requesterId !== userId // allow self-view if user is the linked user
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can view qualifications.' });
+    }
+
+    // Get all qualifications for this user, excluding soft deleted
     const [qualRows] = await db.query(
       `SELECT q.ID, q.Name, sq.Createdat, sq.Updatedat
        FROM Staffqualifications sq
        JOIN Qualifications q ON sq.QualificationID = q.ID
        WHERE sq.Userid = ? AND sq.Deletedat IS NULL`,
-      [personId]
+      [userId]
     );
     return res.status(200).json({ qualifications: qualRows });
   } catch (err) {
@@ -1272,14 +1304,15 @@ exports.getAvailableClientShifts = async (req, res) => {
         }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
-      // For Employee - Standard User: Show only one open slot per shift, hide shifts where user is already assigned, and filter by qualification
-      // 1. Exclude shifts where this employee is already assigned to any slot (pending/approved/open)
-      // 2. For each shift, show only one open slot (lowest id)
-      // 3. Only include shifts for which the employee is qualified
+      // For Employee - Standard User:
+      // - Only show one open slot per shift (first available)
+      // - Hide shifts where user is already assigned (pending/approved/open)
+      // - Only include shifts for which the employee is qualified (via Qualificationgroupid)
+      // - Only show shifts for today or in the future
 
-      // Step 1: Get employee's qualification IDs
+      // Step 1: Get employee's active qualification IDs (not soft-deleted)
       const [empQualRows] = await db.query(
-        `SELECT QualificationID FROM Staffqualifications WHERE Userid = ?`,
+        `SELECT QualificationID FROM Staffqualifications WHERE Userid = ? AND Deletedat IS NULL`,
         [userId]
       );
       const empQualIds = empQualRows.map(q => q.QualificationID);
@@ -1288,7 +1321,9 @@ exports.getAvailableClientShifts = async (req, res) => {
         return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
       }
 
-      // Step 2: Get all open staff shifts not already assigned to this employee
+      // Step 2: Get all open staff shifts not already assigned to this employee, for today or future
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
@@ -1298,12 +1333,13 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         WHERE css.Status = 'open' AND css.Deletedat IS NULL
+          AND csr.Shiftdate >= ?
           AND css.Clientshiftrequestid NOT IN (
             SELECT Clientshiftrequestid FROM Clientstaffshifts
             WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
           )
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
-      `, [userId]);
+      `, [formatDate(today), userId]);
 
       // Step 3: Group by shiftrequestid, pick only the first open slot per shift
       const seenShiftIds = new Set();
@@ -1938,9 +1974,11 @@ exports.getMyShifts = async (req, res) => {
   const userType = req.user?.usertype;
   if (userType !== 'Employee - Standard User') {
     return res.status(403).json({ message: 'Access denied: Employees only' });
-  }
   try {
-    // Get all staff shifts assigned to this user, status pending approval, approved, or rejected
+    // Only show shifts for today or in the future
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Get all staff shifts assigned to this user, status pending approval, approved, or rejected, and not in the past
     const [rows] = await db.query(`
       SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
              csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
@@ -1949,9 +1987,12 @@ exports.getMyShifts = async (req, res) => {
       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
       LEFT JOIN Clients c ON cl.clientid = c.id
-      WHERE css.Assignedtouserid = ? AND css.Status IN ('pending approval', 'approved', 'rejected') AND css.Deletedat IS NULL
+      WHERE css.Assignedtouserid = ?
+        AND css.Status IN ('pending approval', 'approved', 'rejected')
+        AND css.Deletedat IS NULL
+        AND csr.Shiftdate >= ?
       ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
-    `, [userId]);
+    `, [userId, formatDate(today)]);
     // Fetch qualifications for all qualificationgroupids
     const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
     let qualMap = {};
@@ -1979,6 +2020,7 @@ exports.getMyShifts = async (req, res) => {
   } catch (err) {
     logger.error('Get my shifts error', { error: err });
     res.status(500).json({ message: 'Error fetching my shifts', error: err });
+  }
   }
 };
 // ================== end getMyShifts ==================
