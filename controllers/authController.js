@@ -2263,3 +2263,39 @@ exports.setStaffQualificationRegistrationDetails = async (req, res) => {
   }
 };
 // ================== end setStaffQualificationRegistrationDetails ==================
+
+exports.getStaffQualificationRegistrationDetails = async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const qualificationId = parseInt(req.params.qualificationId, 10);
+  // Only staff/admin or the user themselves can view
+  const requesterType = req.user?.usertype;
+  const requesterId = req.user?.id;
+  if (
+    requesterType !== 'Staff - Standard User' &&
+    requesterType !== 'System Admin' &&
+    requesterId !== personId
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can view registration details.' });
+  }
+  if (!personId || !qualificationId) {
+    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  }
+  try {
+    const [rows] = await db.query(
+      'SELECT Registrationnumber, Dateofregistration, Dateofexpiry FROM Staffqualifications WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL',
+      [personId, qualificationId]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Staff qualification not found for this user.' });
+    }
+    return res.status(200).json({
+      registrationnumber: rows[0].Registrationnumber,
+      dateofregistration: rows[0].Dateofregistration,
+      dateofexpiry: rows[0].Dateofexpiry
+    });
+  } catch (err) {
+    logger.error('Get staff qualification registration details error', { error: err });
+    return res.status(500).json({ message: 'Failed to get staff qualification registration details.', error: err.message });
+  }
+};
+// ================== end getStaffQualificationRegistrationDetails ==================

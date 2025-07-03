@@ -84,6 +84,12 @@ router.post('/link-client-user-location', authenticate, authorizeStaffOrAdmin, l
   return authController.linkClientUserToLocation(req, res, next);
 });
 
+// Get registration details for a staff qualification (self or staff/admin)
+router.get(
+  '/people/:id/qualifications/:qualificationId/registration-details',
+  authenticate,
+  authController.getStaffQualificationRegistrationDetails
+);
 
 // Staff/Admin: Link a client user to a specific location (by email and locationid)
 router.post('/link-client-user-specific-location', authenticate, authorizeStaffOrAdmin, (req, res, next) => {
