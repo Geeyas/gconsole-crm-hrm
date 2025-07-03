@@ -76,10 +76,15 @@ exports.addQualificationToEmployee = async (req, res) => {
     if (!qualRows.length) {
       return res.status(404).json({ message: 'Qualification not found.' });
     }
-    // Check if already linked
+    // Check if already linked (including soft deleted)
     const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
     if (existing.length) {
-      return res.status(409).json({ message: 'Qualification already assigned to this person.' });
+      // If the only existing link is soft deleted, allow re-adding by inserting a new row
+      const notDeleted = existing.find(e => !e.Deletedat);
+      if (notDeleted) {
+        return res.status(409).json({ message: 'Qualification already assigned to this person.' });
+      }
+      // else, allow re-adding (insert new row)
     }
     // Insert link (fill all required columns)
     await db.query(
