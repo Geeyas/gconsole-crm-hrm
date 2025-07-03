@@ -107,6 +107,14 @@ router.put('/update-password', authenticate, authController.updatePassword);
 
 
 // Add qualification to an employee (self or staff/admin)
+
+// Set registration details for a staff qualification (self or staff/admin)
+router.put(
+  '/people/:id/qualifications/:qualificationId/registration-details',
+  authenticate,
+  authController.setStaffQualificationRegistrationDetails
+);
+
 router.post('/people/:id/qualifications', authenticate, authController.addQualificationToEmployee);
 
 // Get all qualifications assigned to a person (People.ID)

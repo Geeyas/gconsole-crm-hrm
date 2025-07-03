@@ -812,16 +812,31 @@ exports.createClientShiftRequest = async (req, res) => {
     const qualificationname = qualRows.map(q => q.Name);
 
     // ================== send notifications to employees ==================
-    // Fetch all Employee - Standard User users' emails
-    const [employeeRows] = await dbConn.query(`
-      SELECT u.email, u.fullname
-      FROM Users u
-      LEFT JOIN Assignedusertypes au ON au.Userid = u.id
-      LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-      WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
-    `);
-    logger.info('Employee notification target list', { count: employeeRows.length, emails: employeeRows.map(e => e.email) });
-    if (employeeRows && employeeRows.length) {
+    // Fetch all Employee - Standard User users who are qualified for this shift
+    // 1. Get all qualification IDs in this group
+    const [groupQualRows] = await dbConn.query(
+      `SELECT Qualificationid FROM Qualificationgroupitems WHERE Qualificationgroupid = ?`,
+      [qualificationgroupid]
+    );
+    const groupQualIds = groupQualRows.map(q => q.Qualificationid);
+    let qualifiedEmployeeRows = [];
+    if (groupQualIds.length) {
+      // 2. Find all employees who have at least one of these qualifications
+      const placeholders = groupQualIds.map(() => '?').join(',');
+      const [rows] = await dbConn.query(
+        `SELECT DISTINCT u.email, u.fullname
+         FROM Users u
+         LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+         LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+         LEFT JOIN Staffqualifications sq ON sq.Userid = u.id
+         WHERE ut.Name = 'Employee - Standard User' AND u.email IS NOT NULL
+           AND sq.QualificationID IN (${placeholders})`,
+        groupQualIds
+      );
+      qualifiedEmployeeRows = rows;
+    }
+    logger.info('Qualified employee notification target list', { count: qualifiedEmployeeRows.length, emails: qualifiedEmployeeRows.map(e => e.email) });
+    if (qualifiedEmployeeRows && qualifiedEmployeeRows.length) {
       const shift = createdShift[0];
       const locationName = shift.LocationName || '';
       const clientName = shift.clientname || '';
@@ -829,7 +844,7 @@ exports.createClientShiftRequest = async (req, res) => {
       const startTime = shift.Starttime;
       const endTime = shift.Endtime;
       // Await all emails before responding
-      await Promise.all(employeeRows.map(async (emp) => {
+      await Promise.all(qualifiedEmployeeRows.map(async (emp) => {
         logger.info('Sending shift notification email', { to: emp.email });
         const template = mailTemplates.shiftNewEmployee({
           employeeName: emp.fullname,
@@ -1253,9 +1268,23 @@ exports.getAvailableClientShifts = async (req, res) => {
         }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
     } else if (userType === 'Employee - Standard User') {
-      // For Employee - Standard User: Show only one open slot per shift, and hide shifts where user is already assigned
+      // For Employee - Standard User: Show only one open slot per shift, hide shifts where user is already assigned, and filter by qualification
       // 1. Exclude shifts where this employee is already assigned to any slot (pending/approved/open)
       // 2. For each shift, show only one open slot (lowest id)
+      // 3. Only include shifts for which the employee is qualified
+
+      // Step 1: Get employee's qualification IDs
+      const [empQualRows] = await db.query(
+        `SELECT QualificationID FROM Staffqualifications WHERE Userid = ?`,
+        [userId]
+      );
+      const empQualIds = empQualRows.map(q => q.QualificationID);
+      if (empQualIds.length === 0) {
+        // Employee has no qualifications, so no shifts are available
+        return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
+      }
+
+      // Step 2: Get all open staff shifts not already assigned to this employee
       const [rows] = await db.query(`
         SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
@@ -1272,7 +1301,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
       `, [userId]);
 
-      // Group by shiftrequestid, pick only the first open slot per shift
+      // Step 3: Group by shiftrequestid, pick only the first open slot per shift
       const seenShiftIds = new Set();
       const uniqueRows = [];
       for (const row of rows) {
@@ -1282,30 +1311,49 @@ exports.getAvailableClientShifts = async (req, res) => {
         }
       }
 
-      // Fetch qualifications for all qualificationgroupids
+      // Step 4: Fetch qualifications for all qualificationgroupids
       const groupIds = [...new Set(uniqueRows.map(r => r.Qualificationgroupid).filter(Boolean))];
       let qualMap = {};
+      let groupQuals = {};
       if (groupIds.length) {
         const [qualRows] = await db.query(
-          `SELECT qgi.Qualificationgroupid, q.Name
+          `SELECT qgi.Qualificationgroupid, qgi.Qualificationid, q.Name
            FROM Qualificationgroupitems qgi
            JOIN Qualifications q ON qgi.Qualificationid = q.ID
            WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
           groupIds
         );
+        // Map groupId -> [qualification names]
         qualMap = groupIds.reduce((acc, gid) => {
           acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
           return acc;
         }, {});
+        // Map groupId -> [qualification IDs]
+        groupQuals = groupIds.reduce((acc, gid) => {
+          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Qualificationid);
+          return acc;
+        }, {});
       }
-      const formatted = uniqueRows.map(row => ({
+
+      // Step 5: Filter shifts by employee's qualifications
+      const qualifiedRows = uniqueRows.filter(row => {
+        const groupQ = groupQuals[row.Qualificationgroupid] || [];
+        // Employee is qualified if they have at least one qualification in the group
+        return groupQ.some(qid => empQualIds.includes(qid));
+      });
+
+      // Step 6: Paginate
+      const paginatedRows = qualifiedRows.slice((page - 1) * limit, (page - 1) * limit + limit);
+
+      // Step 7: Format output
+      const formatted = paginatedRows.map(row => ({
         ...row,
         Shiftdate: formatDate(row.Shiftdate),
         Starttime: formatDateTime(row.Starttime),
         Endtime: formatDateTime(row.Endtime),
         qualificationname: qualMap[row.Qualificationgroupid] || []
       }));
-      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: formatted.length } });
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
     } else if (userType) {
       // If userType is present but not recognized, return 403
       return res.status(403).json({ message: 'Access denied: Unknown user type', code: 'ACCESS_DENIED' });
@@ -2145,3 +2193,73 @@ exports.removeEmployeeFromStaffShift = async (req, res) => {
   }
 };
 // ================== end removeEmployeeFromStaffShift ==================
+// ================== setStaffQualificationRegistrationDetails ==================
+// Sets registration details for a staff qualification (for a specific employee/qualification)
+exports.setStaffQualificationRegistrationDetails = async (req, res) => {
+  const personId = parseInt(req.params.id, 10);
+  const qualificationId = parseInt(req.params.qualificationId, 10);
+  const requesterType = req.user?.usertype;
+  const requesterId = req.user?.id;
+  const {
+    registrationnumber,
+    dateofregistration,
+    dateofexpiry
+  } = req.body;
+
+  // Only staff/admin or the user themselves can update
+  if (
+    requesterType !== 'Staff - Standard User' &&
+    requesterType !== 'System Admin' &&
+    requesterId !== personId
+  ) {
+    return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can set registration details.' });
+  }
+
+  if (!personId || !qualificationId) {
+    return res.status(400).json({ message: 'Missing personId or qualificationId.' });
+  }
+
+  // All fields are now mandatory
+  if (!registrationnumber || !dateofregistration || !dateofexpiry) {
+    return res.status(400).json({ message: 'All fields (registrationnumber, dateofregistration, dateofexpiry) are required.' });
+  }
+
+  try {
+    // Check if the staff qualification exists
+    const [existing] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL', [personId, qualificationId]);
+    if (!existing.length) {
+      return res.status(404).json({ message: 'Staff qualification not found for this user.' });
+    }
+
+    // Build dynamic update
+    const fields = [];
+    const values = [];
+    if (registrationnumber !== undefined) {
+      fields.push('Registrationnumber = ?');
+      values.push(registrationnumber);
+    }
+    if (dateofregistration !== undefined) {
+      fields.push('Dateofregistration = ?');
+      values.push(dateofregistration);
+    }
+    if (dateofexpiry !== undefined) {
+      fields.push('Dateofexpiry = ?');
+      values.push(dateofexpiry);
+    }
+    fields.push('Updatedat = NOW()');
+    fields.push('Updatedbyid = ?');
+    values.push(requesterId);
+    values.push(personId, qualificationId);
+
+    const sql = `UPDATE Staffqualifications SET ${fields.join(', ')} WHERE Userid = ? AND QualificationID = ? AND Deletedat IS NULL`;
+    await db.query(sql, values);
+
+    // Return the updated row
+    const [updated] = await db.query('SELECT * FROM Staffqualifications WHERE Userid = ? AND QualificationID = ?', [personId, qualificationId]);
+    return res.status(200).json({ message: 'Staff qualification registration details set.', staffqualification: updated[0] });
+  } catch (err) {
+    logger.error('Set staff qualification registration details error', { error: err });
+    return res.status(500).json({ message: 'Failed to set staff qualification registration details.', error: err.message });
+  }
+};
+// ================== end setStaffQualificationRegistrationDetails ==================
