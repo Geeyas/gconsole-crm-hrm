@@ -116,13 +116,12 @@ exports.getQualificationsForEmployee = async (req, res) => {
     if (!personRows.length) {
       return res.status(404).json({ message: 'Person not found.' });
     }
-    // Get all qualifications for this person
-    // Remove q.Description if it does not exist in Qualifications table
+    // Get all qualifications for this person, excluding soft deleted
     const [qualRows] = await db.query(
       `SELECT q.ID, q.Name, sq.Createdat, sq.Updatedat
        FROM Staffqualifications sq
        JOIN Qualifications q ON sq.QualificationID = q.ID
-       WHERE sq.Userid = ?`,
+       WHERE sq.Userid = ? AND sq.Deletedat IS NULL`,
       [personId]
     );
     return res.status(200).json({ qualifications: qualRows });
