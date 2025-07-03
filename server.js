@@ -36,6 +36,15 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Stricter rate limiter for sensitive endpoints (e.g., login/register)
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // Max 5 requests per IP per minute
+  message: { error: 'Too many login/register attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // CORS configuration for specific domains
 const corsOptions = {
   origin: [
@@ -59,6 +68,10 @@ app.use(cors(corsOptions));
 app.use(helmet()); // 🛡 Adds basic security headers
 app.use(express.json()); // ✅ Replaces body-parser
 app.use(limiter);
+
+// Apply stricter limiter to login and register endpoints before routes are registered
+app.use('/api/login', authLimiter);
+app.use('/api/register', authLimiter);
 
 // API Docs
 app.get('/api', (req, res) => {
