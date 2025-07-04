@@ -876,9 +876,24 @@ exports.createClientShiftRequest = async (req, res) => {
       const shift = createdShift[0];
       const locationName = shift.LocationName || '';
       const clientName = shift.clientname || '';
-      const shiftDate = shift.Shiftdate;
-      const startTime = shift.Starttime;
-      const endTime = shift.Endtime;
+      // Format date/time for email readability
+      function toISO(val) {
+        if (!val) return '';
+        const d = new Date(val);
+        return isNaN(d) ? val : d.toISOString();
+      }
+      function formatForEmail(val) {
+        if (!val) return '';
+        const d = new Date(val);
+        if (isNaN(d)) return val;
+        return d.toLocaleString('en-AU', {
+          weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Australia/Perth'
+        });
+      }
+      const shiftDateEmail = formatForEmail(toISO(shift.Shiftdate));
+      const startTimeEmail = formatForEmail(toISO(shift.Starttime));
+      const endTimeEmail = formatForEmail(toISO(shift.Endtime));
       // Await all emails before responding
       await Promise.all(qualifiedEmployeeRows.map(async (emp) => {
         logger.info('Sending shift notification email', { to: emp.email });
@@ -886,9 +901,9 @@ exports.createClientShiftRequest = async (req, res) => {
           employeeName: emp.fullname,
           locationName,
           clientName,
-          shiftDate,
-          startTime,
-          endTime,
+          shiftDate: shiftDateEmail,
+          startTime: startTimeEmail,
+          endTime: endTimeEmail,
           qualificationNames: qualificationname
         });
         try {
@@ -1477,13 +1492,25 @@ exports.acceptClientStaffShift = async (req, res) => {
         LEFT JOIN Clients c ON uc.clientid = c.id
         WHERE uc.clientid = ?
       `, [updatedShift.Clientid]);
+
+      // Ensure date/time are in ISO format for email template
+      // If already ISO, this is a no-op; if not, try to convert
+      function toISO(val) {
+        if (!val) return '';
+        const d = new Date(val);
+        return isNaN(d) ? val : d.toISOString();
+      }
+      const shiftDateISO = toISO(updatedShift.Shiftdate);
+      const startTimeISO = toISO(updatedShift.Starttime);
+      const endTimeISO = toISO(updatedShift.Endtime);
+
       for (const client of clientUsers) {
         const template = mailTemplates.shiftAcceptedClient({
           clientName: client.clientName,
           locationName: updatedShift.LocationName,
-          shiftDate: updatedShift.Shiftdate,
-          startTime: updatedShift.Starttime,
-          endTime: updatedShift.Endtime,
+          shiftDate: shiftDateISO,
+          startTime: startTimeISO,
+          endTime: endTimeISO,
           employeeName: updatedShift.employeeName || 'An employee'
         });
         if (client.email) {
