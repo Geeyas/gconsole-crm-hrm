@@ -1262,12 +1262,14 @@ exports.getAvailableClientShifts = async (req, res) => {
       }
       // Show all shifts (no date filter)
       const filteredRows = rows.filter(row => !row.Deletedat);
+      // Send raw UTC values as returned from DB (no formatting)
       const formatted = filteredRows
         .map(row => ({
           ...row,
-          Shiftdate: formatDate(row.Shiftdate),
-          Starttime: formatDateTime(row.Starttime),
-          Endtime: formatDateTime(row.Endtime),
+          // Send as-is (raw DB values, assumed UTC)
+          Shiftdate: row.Shiftdate,
+          Starttime: row.Starttime,
+          Endtime: row.Endtime,
           qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         }));
@@ -1338,14 +1340,14 @@ exports.getAvailableClientShifts = async (req, res) => {
           return acc;
         }, {});
       }
-      // Format output
+      // Send raw UTC values as returned from DB (no formatting)
       const formatted = shiftRows
         .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
         .map(row => ({
           ...row,
-          Shiftdate: formatDate(row.Shiftdate),
-          Starttime: formatDateTime(row.Starttime),
-          Endtime: formatDateTime(row.Endtime),
+          Shiftdate: row.Shiftdate,
+          Starttime: row.Starttime,
+          Endtime: row.Endtime,
           qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         }));
@@ -1432,12 +1434,12 @@ exports.getAvailableClientShifts = async (req, res) => {
       // Step 6: Paginate
       const paginatedRows = qualifiedRows.slice((page - 1) * limit, (page - 1) * limit + limit);
 
-      // Step 7: Format output
+      // Step 7: Send raw UTC values as returned from DB (no formatting)
       const formatted = paginatedRows.map(row => ({
         ...row,
-        Shiftdate: formatDate(row.Shiftdate),
-        Starttime: formatDateTime(row.Starttime),
-        Endtime: formatDateTime(row.Endtime),
+        Shiftdate: row.Shiftdate,
+        Starttime: row.Starttime,
+        Endtime: row.Endtime,
         qualificationname: qualMap[row.Qualificationgroupid] || []
       }));
       return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });

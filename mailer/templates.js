@@ -141,16 +141,16 @@ function shiftApprovedClient({ clientName, employeeName, locationName, shiftDate
 
 function shiftRejectedEmployee({ employeeName, clientName, locationName, shiftDate, startTime, endTime }) {
   return {
-    subject: `Shift Rejected: ${formatDateTimeForEmail(shiftDate)} at ${locationName}`,
+    subject: `Shift Cancelled: ${formatDateTimeForEmail(shiftDate)} at ${locationName}`,
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
-        <h2 style="color: #d32f2f; text-align: center;">❌ Shift Rejected</h2>
+        <h2 style="color: #d32f2f; text-align: center;">❌ Shift Cancelled</h2>
         
         <p style="font-size: 16px;">Dear <strong>${employeeName}</strong>,</p>
 
         <p style="font-size: 15px; line-height: 1.6;">
           Unfortunately, your shift at <strong>${locationName}</strong> for <strong>${clientName}</strong> on <strong>${formatDateTimeForEmail(shiftDate)}</strong> has been 
-          <span style="color: #d32f2f; font-weight: bold;">rejected</span> by the administrator.
+          <span style="color: #d32f2f; font-weight: bold;">cancelled</span> by the administrator.
         </p>
 
         <div style="background-color: #fff4f4; border: 1px solid #f8d7da; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
