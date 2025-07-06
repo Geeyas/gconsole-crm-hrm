@@ -771,6 +771,38 @@ exports.createClientShiftRequest = async (req, res) => {
   const now = new Date();
   const userType = req.user?.usertype;
 
+  // --- Ensure all date/time fields are stored as UTC ---
+  function toUTC(val) {
+    if (!val) return null;
+    // If only date (YYYY-MM-DD), treat as midnight local and convert to UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      const d = new Date(val + 'T00:00:00Z');
+      return d;
+    }
+    // If date and time (YYYY-MM-DD HH:mm), treat as local and convert to UTC
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
+      const [date, time] = val.split(' ');
+      const d = new Date(date + 'T' + time + ':00Z');
+      return d;
+    }
+    // If already ISO string, parse as date
+    const d = new Date(val);
+    return isNaN(d) ? null : d;
+  }
+  function formatForMySQL(dt) {
+    if (!dt || isNaN(dt.getTime())) return null;
+    // Returns 'YYYY-MM-DD HH:mm:ss' in UTC
+    return dt.getUTCFullYear() + '-' +
+      String(dt.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(dt.getUTCDate()).padStart(2, '0') + ' ' +
+      String(dt.getUTCHours()).padStart(2, '0') + ':' +
+      String(dt.getUTCMinutes()).padStart(2, '0') + ':' +
+      String(dt.getUTCSeconds()).padStart(2, '0');
+  }
+  const shiftdateUTC = formatForMySQL(toUTC(shiftdate));
+  const starttimeUTC = formatForMySQL(toUTC(starttime));
+  const endtimeUTC = formatForMySQL(toUTC(endtime));
+
   try {
     // Get Clientid from Clientlocations (case sensitive)
     const locationSql = 'SELECT Clientid FROM Clientlocations WHERE ID = ?';
@@ -801,7 +833,7 @@ exports.createClientShiftRequest = async (req, res) => {
     const insertShiftSql = `INSERT INTO Clientshiftrequests
       (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const insertShiftParams = [clientid, clientlocationid, shiftdate, starttime, endtime, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid];
+    const insertShiftParams = [clientid, clientlocationid, shiftdateUTC, starttimeUTC, endtimeUTC, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid];
     const [result] = await dbConn.query(insertShiftSql, insertShiftParams);
     const clientshiftrequestid = result.insertId;
 

@@ -5,7 +5,19 @@ function formatDateTimeForEmail(isoString) {
   if (!isoString) return '';
   const d = new Date(isoString);
   if (isNaN(d)) return isoString;
-  // Format: Fri, 27 Jun 2025, 09:00 AM
+  // If the time is exactly midnight (00:00:00), show only the date.
+  if (
+    d.getHours() === 0 &&
+    d.getMinutes() === 0 &&
+    d.getSeconds() === 0 &&
+    d.getMilliseconds() === 0
+  ) {
+    // Format: Fri, 27 Jun 2025
+    return d.toLocaleDateString('en-AU', {
+      weekday: 'short', year: 'numeric', month: 'short', day: '2-digit', timeZone: 'Australia/Perth'
+    });
+  }
+  // Otherwise, show date and time
   return d.toLocaleString('en-AU', {
     weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Australia/Perth'
@@ -166,8 +178,12 @@ function shiftRejectedEmployee({ employeeName, clientName, locationName, shiftDa
 
 
 function shiftNewEmployee({ employeeName, locationName, clientName, shiftDate, startTime, endTime, qualificationNames }) {
+  // Use formatted date only (no time) for subject and body date
+  const formattedDate = formatDateTimeForEmail(shiftDate);
+  // Remove time if present in formattedDate (e.g., 'Fri, 11 Jul 2025, 12:00 am' -> 'Fri, 11 Jul 2025')
+  const dateOnly = formattedDate.replace(/,? \d{1,2}:\d{2} (am|pm)/i, '');
   return {
-    subject: `New Shift Available: ${locationName} on ${shiftDate}`,
+    subject: `New Shift Available: ${locationName} on ${dateOnly}`,
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
         <h2 style="color: #1976d2; text-align: center;">📢 New Shift Available</h2>
@@ -175,7 +191,7 @@ function shiftNewEmployee({ employeeName, locationName, clientName, shiftDate, s
         <p style="font-size: 16px;">Dear <strong>${employeeName || 'Employee'}</strong>,</p>
 
         <p style="font-size: 15px; line-height: 1.6;">
-          A new shift has been created at <strong>${locationName}</strong> for <strong>${clientName}</strong> on <strong>${shiftDate}</strong>.
+          A new shift has been created at <strong>${locationName}</strong> for <strong>${clientName}</strong> on <strong>${dateOnly}</strong>.
         </p>
 
         <div style="background-color: #f4f6f8; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
@@ -183,10 +199,10 @@ function shiftNewEmployee({ employeeName, locationName, clientName, shiftDate, s
           <p style="font-size: 20px; margin: 5px 0 15px;"><strong>${locationName}</strong></p>
           
           <p style="font-size: 18px; margin: 0;"><strong>🗓️ Date</strong></p>
-          <p style="font-size: 16px; margin: 5px 0 15px;">${shiftDate}</p>
+          <p style="font-size: 16px; margin: 5px 0 15px;">${dateOnly}</p>
           
           <p style="font-size: 18px; margin: 0;"><strong>⏰ Time</strong></p>
-          <p style="font-size: 16px; margin: 5px 0;">${startTime} - ${endTime}</p>
+          <p style="font-size: 16px; margin: 5px 0;">${formatDateTimeForEmail(startTime)} - ${formatDateTimeForEmail(endTime)}</p>
         </div>
 
         <p style="font-size: 15px;"><strong>Required Qualifications:</strong> ${(qualificationNames || []).join(', ')}</p>
