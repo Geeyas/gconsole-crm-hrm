@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const { pool: db } = require('../config/db');
 const winston = require('winston');
 
 let validTables = new Set(); // Stores valid table names

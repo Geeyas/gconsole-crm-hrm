@@ -1,6 +1,7 @@
 // mailer/mailer.js
 // Utility for sending emails using Gmail SMTP (Google Workspace)
 const nodemailer = require('nodemailer');
+const { logger } = require('../middleware/requestLogger');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -20,6 +21,12 @@ function sendMail(options) {
     from: `GConsole HRM Notifications <${process.env.SMTP_USER}>`,
     ...options
   };
+  logger.info(`Email sent`, {
+    to: mailOptions.to,
+    subject: mailOptions.subject,
+    timestamp: new Date().toISOString(),
+    action: 'send_email'
+  });
   return transporter.sendMail(mailOptions);
 }
 

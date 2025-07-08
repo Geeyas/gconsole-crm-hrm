@@ -324,9 +324,9 @@ exports.linkClientUserToSpecificLocationByEmail = async (req, res) => {
   }
 };
 // ================== end linkClientUserToSpecificLocationByEmail ==================
-const db = require('../config/db');
+const { pool: db } = require('../config/db');
 const jwt = require('jsonwebtoken');
-const { hashPassword, generateSalt } = require('../utils/hashUtils');
+const { hashPassword, verifyPassword, migrateLegacyHash, generateSalt } = require('../utils/hashUtils');
 const winston = require('winston');
 const { sendMail } = require('../mailer/mailer');
 const mailTemplates = require('../mailer/templates');
@@ -382,9 +382,31 @@ exports.login = async (req, res, next) => {
     if (user.deletedat) {
       return res.status(403).json({ message: 'User account has been deleted', code: 'USER_DELETED' });
     }
-    const hashedInput = hashPassword(password, user.salt);
-    if (hashedInput !== user.passwordhash)
+    // Try to verify password (supports both bcrypt and legacy SHA-256)
+    const isValidPassword = await verifyPassword(password, user.passwordhash, user.salt);
+    
+    if (!isValidPassword) {
       return res.status(401).json({ message: 'Invalid credentials', code: 'INVALID_CREDENTIALS' });
+    }
+
+    // If password is valid and user has a salt (legacy SHA-256), migrate to bcrypt
+    if (user.salt && user.salt.trim() !== '') {
+      try {
+        console.log(`Migrating password for user ${user.username} from SHA-256 to bcrypt...`);
+        const newHash = await migrateLegacyHash(password, user.passwordhash, user.salt);
+        
+        // Update the user's password hash and remove the salt
+        await db.query(
+          'UPDATE Users SET passwordhash = ?, salt = NULL, updatedat = NOW(), updatedbyid = ? WHERE id = ?',
+          [newHash, user.id, user.id]
+        );
+        
+        console.log(`Password migration completed for user ${user.username}`);
+      } catch (error) {
+        console.error(`Password migration failed for user ${user.username}:`, error);
+        // Don't fail the login, just log the error
+      }
+    }
 
     // Access Token (short-lived)
     const token = jwt.sign(
@@ -398,30 +420,35 @@ exports.login = async (req, res, next) => {
         portal: user.portal_name
       },
       process.env.JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: '15m' } // Short-lived access token
     );
 
     // Refresh Token (long-lived)
-    // const refreshToken = jwt.sign(
-    //   { id: user.id },
-    //   process.env.REFRESH_TOKEN_SECRET,
-    //   { expiresIn: '4h' }
-    // );
+    const refreshToken = jwt.sign(
+      { 
+        id: user.id,
+        type: 'refresh',
+        version: user.updatedat ? new Date(user.updatedat).getTime() : 0
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     // Send refresh token as HTTP-only cookie
-    // res.cookie('refreshToken', refreshToken, {
-    //   httpOnly: true,
-    //   secure: process.env.NODE_ENV === 'production', // true in production
-    //   sameSite: 'Strict',
-    //   maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-
-    // });
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
 
     res.status(200).json({
       message: 'Login successful',
       token,
+      refreshToken, // Also send in response for mobile apps
       usertype: user.usertype_name,
-      portal: user.portal_name
+      portal: user.portal_name,
+      expiresIn: 15 * 60 // 15 minutes in seconds
     });
   } catch (err) {
     logger.error('Login DB error', { error: err });
@@ -432,37 +459,137 @@ exports.login = async (req, res, next) => {
 
 // ================== refreshToken ==================
 // Issues a new JWT token using a valid refresh token.
-exports.refreshToken = (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
-  if (!refreshToken) return res.status(401).json({ message: 'No refresh token found' });
+exports.refreshToken = async (req, res) => {
+  const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ 
+      message: 'No refresh token found',
+      code: 'NO_REFRESH_TOKEN'
+    });
+  }
 
-  jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Invalid or expired refresh token' });
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET);
+    
+    if (decoded.type !== 'refresh') {
+      return res.status(403).json({ 
+        message: 'Invalid token type',
+        code: 'INVALID_TOKEN_TYPE'
+      });
+    }
 
-    const newtoken = jwt.sign(
-      {
-        id: decoded.id
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '2h' }
+    // Get user data to check if account is still valid
+    const [userRows] = await db.query(
+      `SELECT u.*, ut.Name AS usertype_name, p.Name AS portal_name
+       FROM Users u
+       LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+       LEFT JOIN Portals p ON ut.Portalid = p.ID
+       WHERE u.id = ? AND u.deletedat IS NULL`,
+      [decoded.id]
     );
 
-    res.json({ token: newtoken });
-  });
+    if (!userRows.length) {
+      return res.status(401).json({ 
+        message: 'User not found or account deleted',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    const user = userRows[0];
+
+    // Check if user was updated after token was issued
+    if (decoded.version && user.updatedat) {
+      const userVersion = new Date(user.updatedat).getTime();
+      if (userVersion > decoded.version) {
+        return res.status(401).json({ 
+          message: 'Token invalidated due to account changes',
+          code: 'TOKEN_INVALIDATED'
+        });
+      }
+    }
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        usertype: user.usertype_name,
+        portal: user.portal_name
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Generate new refresh token
+    const newRefreshToken = jwt.sign(
+      { 
+        id: user.id,
+        type: 'refresh',
+        version: user.updatedat ? new Date(user.updatedat).getTime() : 0
+      },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Set new refresh token cookie
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({ 
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: 15 * 60
+    });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        message: 'Refresh token expired',
+        code: 'REFRESH_TOKEN_EXPIRED'
+      });
+    }
+    return res.status(403).json({ 
+      message: 'Invalid refresh token',
+      code: 'INVALID_REFRESH_TOKEN'
+    });
+  }
 };
 // ================== end refreshToken ==================
+
+// ================== logout ==================
+// Logs out a user by clearing the refresh token cookie
+exports.logout = (req, res) => {
+  // Clear the refresh token cookie
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+
+  res.status(200).json({ 
+    message: 'Logout successful',
+    code: 'LOGOUT_SUCCESS'
+  });
+};
+// ================== end logout ==================
 
 // ================== register ==================
 // Registers a new user and links them to a person and usertype.
 exports.register = async (req, res) => {
-  const { firstname, lastname, username, email, password, usertype_id } = req.body;
+  const { firstname, lastname, email, password, usertype_id } = req.body;
+  const username = email;
   const creatorId = req.user?.id;
 
   if (!creatorId) {
     return res.status(401).json({ message: 'Unauthorized. Creator ID not found.' });
   }
 
-  if (!firstname || !lastname || !username || !email || !password || !usertype_id) {
+  if (!firstname || !lastname || !email || !password || !usertype_id) {
     return res.status(400).json({ message: 'All fields are required' });
   }
 
@@ -476,8 +603,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Email already in use' });
     }
 
-    const salt = generateSalt();
-    const hash = hashPassword(password, salt);
+    const hash = await hashPassword(password);
     const fullname = `${firstname} ${lastname}`;
 
     const [peopleResult] = await db.query(
@@ -489,9 +615,9 @@ exports.register = async (req, res) => {
     const personId = peopleResult.insertId;
 
     const [userResult] = await db.query(
-      `INSERT INTO Users (fullname, username, email, passwordhash, salt, createdat, createdbyid, updatedat, updatedbyid)
-       VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
-      [fullname, username, email, hash, salt, creatorId, creatorId]
+      `INSERT INTO Users (fullname, username, email, passwordhash, createdat, createdbyid, updatedat, updatedbyid)
+       VALUES (?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
+      [fullname, email, email, hash, creatorId, creatorId]
     );
 
     const userId = userResult.insertId;
@@ -511,7 +637,7 @@ exports.register = async (req, res) => {
 
   } catch (err) {
     logger.error('Register error', { error: err });
-    res.status
+    res.status(500).json({ message: 'Failed to register user', error: err.message });
   }
 };
 // ================== end register ==================
@@ -546,18 +672,17 @@ exports.updatePassword = async (req, res) => {
     if (results.length === 0)
       return res.status(404).json({ message: 'User not found' });
 
-    const newSalt = generateSalt();
-    const newHash = hashPassword(newPassword, newSalt);
+    const newHash = await hashPassword(newPassword);
 
     await db.query(
-      'UPDATE Users SET passwordhash = ?, salt = ?, updatedat = NOW(), updatedbyid = ? WHERE username = ?',
-      [newHash, newSalt, updaterId, username]
+      'UPDATE Users SET passwordhash = ?, updatedat = NOW(), updatedbyid = ? WHERE username = ?',
+      [newHash, updaterId, username]
     );
 
     res.status(200).json({ message: 'Password updated successfully' });
   } catch (err) {
     logger.error('Password update error', { error: err });
-    res.status(500).json({ message: 'Password update failed', error: err });
+    res.status(500).json({ message: 'Password update failed', error: err.message });
   }
 };
 // ================== end updatePassword ==================
@@ -1066,39 +1191,30 @@ exports.getMyClientLocations = async (req, res) => {
       });
       return res.status(200).json({ clients: Object.values(clientsMap) });
     } else {
-      // Client - Standard User: only their linked client locations, EXCLUDING soft-deleted
-      // Get all clientids for this user from Userclients
-      const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-      if (!clientRows.length) {
-        return res.status(200).json({ clients: [] });
+      // Client - Standard User: only their directly linked client locations, EXCLUDING soft-deleted
+      // Get all clientlocationids for this user from Userclients
+      const [linkRows] = await db.query('SELECT Clientlocationid FROM Userclients WHERE userid = ? AND Clientlocationid IS NOT NULL', [userId]);
+      if (!linkRows.length) {
+        return res.status(200).json({ locations: [] });
       }
-      const clientIds = clientRows.map(row => row.clientid);
-      // Get all locations for these clientids, join with client info, EXCLUDING soft-deleted
+      const locationIds = linkRows.map(row => row.Clientlocationid);
+      // Get only those locations, join with client info, EXCLUDING soft-deleted
       const [locations] = await db.query(
         `SELECT cl.*, c.Name as clientname
          FROM Clientlocations cl
          LEFT JOIN Clients c ON cl.clientid = c.id
-         WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')}) AND cl.Deletedat IS NULL`,
-        clientIds
+         WHERE cl.ID IN (${locationIds.map(() => '?').join(',')}) AND cl.Deletedat IS NULL`,
+        locationIds
       );
-      // Group by client
-      const clientsMap = {};
-      locations.forEach(loc => {
-        if (!clientsMap[loc.clientid]) {
-          clientsMap[loc.clientid] = {
-            id: loc.clientid,
-            name: loc.clientname,
-            locations: []
-          };
-        }
-        clientsMap[loc.clientid].locations.push({
-          id: loc.ID,
-          clientid: loc.clientid,
-          locationname: loc.LocationName,
-          locationaddress: loc.LocationAddress || '',
-        });
-      });
-      return res.status(200).json({ clients: Object.values(clientsMap) });
+      // Flat list of locations
+      const result = locations.map(loc => ({
+        id: loc.ID,
+        clientid: loc.clientid,
+        clientname: loc.clientname,
+        locationname: loc.LocationName,
+        locationaddress: loc.LocationAddress || '',
+      }));
+      return res.status(200).json({ locations: result });
     }
   } catch (err) {
     logger.error('Get my client locations error', { error: err });
@@ -1197,6 +1313,7 @@ exports.softDeletePerson = async (req, res) => {
 exports.getAvailableClientShifts = async (req, res) => {
   const userType = req.user?.usertype;
   const userId = req.user?.id;
+  const responseFormat = req.query.format || 'full'; // 'full' or 'simple'
   // Pagination params
   let limit = parseInt(req.query.limit) || 10;
   let page = parseInt(req.query.page) || 1;
@@ -1273,7 +1390,20 @@ exports.getAvailableClientShifts = async (req, res) => {
           qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         }));
-      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+      
+      // Debug log to see what's being returned
+      console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
+        availableShiftsCount: formatted.length,
+        sampleShift: formatted[0] || 'No shifts found',
+        pagination: { page, limit, total }
+      });
+      
+      // Return response based on format
+      if (responseFormat === 'simple') {
+        return res.status(200).json(formatted); // Just the array
+      } else {
+        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+      }
     } else if (userType === 'Client - Standard User' || userType === 'System Admin' || userType === 'Staff - Standard User') {
       // For Client, System Admin, and Staff - Standard User: See all shifts for their own hospital(s) or all
       let clientIds = [];
@@ -1351,7 +1481,20 @@ exports.getAvailableClientShifts = async (req, res) => {
           qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         }));
-      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+      
+      // Debug log to see what's being returned
+      console.log('DEBUG: getAvailableClientShifts (Client/Admin/Staff) response structure:', {
+        availableShiftsCount: formatted.length,
+        sampleShift: formatted[0] || 'No shifts found',
+        pagination: { page, limit, total }
+      });
+      
+      // Return response based on format
+      if (responseFormat === 'simple') {
+        return res.status(200).json(formatted); // Just the array
+      } else {
+        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+      }
     } else if (userType === 'Employee - Standard User') {
       // For Employee - Standard User:
       // - Only show one open slot per shift (first available)
@@ -1442,7 +1585,20 @@ exports.getAvailableClientShifts = async (req, res) => {
         Endtime: row.Endtime,
         qualificationname: qualMap[row.Qualificationgroupid] || []
       }));
-      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
+      
+      // Debug log to see what's being returned
+      console.log('DEBUG: getAvailableClientShifts response structure:', {
+        availableShiftsCount: formatted.length,
+        sampleShift: formatted[0] || 'No shifts found',
+        pagination: { page, limit, total: qualifiedRows.length }
+      });
+      
+      // Return response based on format
+      if (responseFormat === 'simple') {
+        return res.status(200).json(formatted); // Just the array
+      } else {
+        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
+      }
     } else if (userType) {
       // If userType is present but not recognized, return 403
       return res.status(403).json({ message: 'Access denied: Unknown user type', code: 'ACCESS_DENIED' });
@@ -1764,19 +1920,19 @@ exports.getClientUserLocationsByEmail = async (req, res) => {
     if (user.usertype !== 'Client - Standard User') {
       return res.status(400).json({ message: 'Target user is not a Client - Standard User.' });
     }
-    // Get all clientids for this user from Userclients
-    const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [user.id]);
-    if (!clientRows.length) {
+    // Get all clientlocationids for this user from Userclients
+    const [linkRows] = await db.query('SELECT Clientlocationid FROM Userclients WHERE userid = ? AND Clientlocationid IS NOT NULL', [user.id]);
+    if (!linkRows.length) {
       return res.status(200).json({ locations: [] });
     }
-    const clientIds = clientRows.map(row => row.clientid);
-    // Get all locations for these clientids, join with client info
+    const locationIds = linkRows.map(row => row.Clientlocationid);
+    // Get only those locations
     const [locations] = await db.query(
       `SELECT cl.*, c.Name as clientname
        FROM Clientlocations cl
        LEFT JOIN Clients c ON cl.clientid = c.id
-       WHERE cl.clientid IN (${clientIds.map(() => '?').join(',')})`,
-      clientIds
+       WHERE cl.ID IN (${locationIds.map(() => '?').join(',')})`,
+      locationIds
     );
     // Attach user info to each location for clarity
     const result = locations.map(loc => ({
@@ -1887,7 +2043,23 @@ exports.updateClientShiftRequest = async (req, res) => {
     updates.push('Updatedbyid = ?');
     params.push(now, userId);
     params.push(shiftId);
-    await dbConn.query(`UPDATE Clientshiftrequests SET ${updates.join(', ')} WHERE id = ?`, params);
+    
+    // Validate that all updates contain only allowed field names to prevent SQL injection
+    const validFieldNames = [
+      'Clientlocationid', 'Shiftdate', 'Starttime', 'Endtime', 
+      'Qualificationgroupid', 'Totalrequiredstaffnumber', 'Updatedat', 'Updatedbyid'
+    ];
+    
+    const validUpdates = updates.filter(update => {
+      const fieldName = update.split(' = ')[0];
+      return validFieldNames.includes(fieldName);
+    });
+    
+    if (validUpdates.length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update.' });
+    }
+    
+    await dbConn.query(`UPDATE Clientshiftrequests SET ${validUpdates.join(', ')} WHERE id = ?`, params);
 
     // ================== STAFF SHIFT SLOT ADJUSTMENT ==================
     if (newTotalRequired !== undefined && newTotalRequired !== oldTotalRequired) {

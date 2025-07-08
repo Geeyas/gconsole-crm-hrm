@@ -1,5 +1,6 @@
 // controllers/clientController.js
-const db = require('../config/db');
+const { pool } = require('../config/db');
+const { logger } = require('../middleware/requestLogger');
 
 // Helper: Check if user is Systemadmin or Staff
 function isStaffOrAdmin(user) {
@@ -87,7 +88,7 @@ exports.createClient = async (req, res) => {
       return res.status(400).json({ message: 'Invalid payload: columns and values length mismatch' });
     }
     const sql = `INSERT INTO Clients (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-    const [result] = await db.query(sql, values);
+    const [result] = await pool.query(sql, values);
     res.status(201).json({ message: 'Client created', id: result.insertId });
   } catch (err) {
     // Optionally log SQL and values for debugging
@@ -128,7 +129,7 @@ exports.updateClient = async (req, res) => {
     params.push(req.user.id);
     params.push(clientId);
     const sql = `UPDATE Clients SET ${updates.join(', ')} WHERE ID = ? AND Deletedat IS NULL`;
-    await db.query(sql, params);
+    await pool.query(sql, params);
     res.status(200).json({ message: 'Client updated' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update client', error: err.message });
@@ -143,15 +144,21 @@ exports.deleteClient = async (req, res) => {
   const clientId = req.params.id;
   try {
     // Soft-delete the client
-    await db.query(
+    await pool.query(
       'UPDATE Clients SET Deletedat = NOW(), Deletedbyid = ? WHERE ID = ? AND Deletedat IS NULL',
       [req.user.id, clientId]
     );
     // Soft-delete all linked client locations
-    await db.query(
+    await pool.query(
       'UPDATE Clientlocations SET Deletedat = NOW(), Deletedbyid = ? WHERE Clientid = ? AND Deletedat IS NULL',
       [req.user.id, clientId]
     );
+    logger.warn(`Client deleted: ${clientId}`, {
+      user: req.user ? { id: req.user.id, email: req.user.email, role: req.user.usertype } : 'anonymous',
+      action: 'delete_client',
+      endpoint: req.originalUrl,
+      timestamp: new Date().toISOString()
+    });
     res.status(200).json({ message: 'Client and all linked locations deleted (soft)' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete client', error: err.message });
@@ -170,7 +177,7 @@ exports.createClientLocation = async (req, res) => {
     return res.status(400).json({ message: 'Clientid, LocationName, and LocationAddress are required' });
   }
   try {
-    const [result] = await db.query(
+    const [result] = await pool.query(
       'INSERT INTO Clientlocations (Clientid, LocationName, LocationAddress, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, ?, ?, NOW(), ?, NOW(), ?)',
       [Clientid, LocationName, LocationAddress, req.user.id, req.user.id]
     );
@@ -209,7 +216,7 @@ exports.updateClientLocation = async (req, res) => {
   params.push(locationId);
   try {
     const sql = `UPDATE Clientlocations SET ${updates.join(', ')} WHERE ID = ? AND Deletedat IS NULL`;
-    await db.query(sql, params);
+    await pool.query(sql, params);
     res.status(200).json({ message: 'Client location updated' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update client location', error: err.message });
@@ -223,7 +230,7 @@ exports.deleteClientLocation = async (req, res) => {
   }
   const locationId = req.params.id;
   try {
-    await db.query(
+    await pool.query(
       'UPDATE Clientlocations SET Deletedat = NOW(), Deletedbyid = ? WHERE ID = ? AND Deletedat IS NULL',
       [req.user.id, locationId]
     );
