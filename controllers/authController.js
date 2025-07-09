@@ -1321,25 +1321,43 @@ exports.getAvailableClientShifts = async (req, res) => {
   if (limit < 1) limit = 10;
   if (page < 1) page = 1;
   const offset = (page - 1) * limit;
+
+  // Date filter logic
+  const dateParam = req.query.date;
+  let dateFilterSql, dateFilterParams;
+  if (dateParam) {
+    dateFilterSql = 'csr.Shiftdate = ?';
+    dateFilterParams = [dateParam];
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    dateFilterSql = 'csr.Shiftdate >= ?';
+    dateFilterParams = [todayStr];
+  }
+
   try {
     let rows, total;
     if (userType === 'System Admin' || userType === 'Staff - Standard User') {
       // Get total count
-      const [countResult] = await db.query(`SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL`);
+      const [countResult] = await db.query(
+        `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
+        dateFilterParams
+      );
       total = countResult[0]?.total || 0;
       // Admin/Staff: See all shifts for all hospitals/locations
-      [rows] = await db.query(`
-        SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
                u.fullname AS creatorName
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Users u ON csr.Createdbyid = u.id
-        WHERE csr.deletedat IS NULL
+        WHERE csr.deletedat IS NULL AND ${dateFilterSql}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
-      `, [limit, offset]);
+      `, [...dateFilterParams, limit, offset]);
       // For each shift request, get its staff shifts and their statuses
       const shiftIds = rows.map(row => row.shiftrequestid);
       let staffShifts = [];
@@ -1405,7 +1423,6 @@ exports.getAvailableClientShifts = async (req, res) => {
         return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
       }
     } else if (userType === 'Client - Standard User' || userType === 'System Admin' || userType === 'Staff - Standard User') {
-      // For Client, System Admin, and Staff - Standard User: See all shifts for their own hospital(s) or all
       let clientIds = [];
       if (userType === 'Client - Standard User') {
         const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
@@ -1414,9 +1431,9 @@ exports.getAvailableClientShifts = async (req, res) => {
       }
       // Get total count
       const countQuery = userType === 'Client - Standard User'
-        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})`
-        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL`;
-      const countParams = userType === 'Client - Standard User' ? clientIds : [];
+        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')}) AND ${dateFilterSql}`
+        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`;
+      const countParams = userType === 'Client - Standard User' ? [...clientIds, ...dateFilterParams] : dateFilterParams;
       const [countResult] = await db.query(countQuery, countParams);
       total = countResult[0]?.total || 0;
       const shiftQuery = `
@@ -1427,11 +1444,11 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Users u ON csr.Createdbyid = u.id
-        ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')})` : 'WHERE csr.deletedat IS NULL'}
+        ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')}) AND ${dateFilterSql}` : `WHERE csr.deletedat IS NULL AND ${dateFilterSql}`}
         ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
         LIMIT ? OFFSET ?
       `;
-      const shiftParams = userType === 'Client - Standard User' ? [...clientIds, limit, offset] : [limit, offset];
+      const shiftParams = userType === 'Client - Standard User' ? [...clientIds, ...dateFilterParams, limit, offset] : [...dateFilterParams, limit, offset];
       const [shiftRows] = await db.query(shiftQuery, shiftParams);
       // For each shift request, get its staff shifts and their statuses
       const shiftIds = shiftRows.map(row => row.shiftrequestid);
@@ -1496,108 +1513,133 @@ exports.getAvailableClientShifts = async (req, res) => {
         return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
       }
     } else if (userType === 'Employee - Standard User') {
-      // For Employee - Standard User:
-      // - Only show one open slot per shift (first available)
-      // - Hide shifts where user is already assigned (pending/approved/open)
-      // - Only include shifts for which the employee is qualified (via Qualificationgroupid)
-      // - Only show shifts for today or in the future
-
-      // Step 1: Get employee's active qualification IDs (not soft-deleted)
-      const [empQualRows] = await db.query(
-        `SELECT QualificationID FROM Staffqualifications WHERE Userid = ? AND Deletedat IS NULL`,
-        [userId]
-      );
-      const empQualIds = empQualRows.map(q => q.QualificationID);
-      if (empQualIds.length === 0) {
-        // Employee has no qualifications, so no shifts are available
-        return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
-      }
-
-      // Step 2: Get all open staff shifts not already assigned to this employee, for today or future
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const [rows] = await db.query(`
-        SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
-               cl.LocationName, cl.LocationAddress, c.Name AS clientname
-        FROM Clientstaffshifts css
-        LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
-        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-        LEFT JOIN Clients c ON cl.clientid = c.id
-        WHERE css.Status = 'open' AND css.Deletedat IS NULL
-          AND csr.Shiftdate >= ?
-          AND css.Clientshiftrequestid NOT IN (
-            SELECT Clientshiftrequestid FROM Clientstaffshifts
-            WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
-          )
-        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
-      `, [formatDate(today), userId]);
-
-      // Step 3: Group by shiftrequestid, pick only the first open slot per shift
-      const seenShiftIds = new Set();
-      const uniqueRows = [];
-      for (const row of rows) {
-        if (!seenShiftIds.has(row.Clientshiftrequestid)) {
-          uniqueRows.push(row);
-          seenShiftIds.add(row.Clientshiftrequestid);
-        }
-      }
-
-      // Step 4: Fetch qualifications for all qualificationgroupids
-      const groupIds = [...new Set(uniqueRows.map(r => r.Qualificationgroupid).filter(Boolean))];
-      let qualMap = {};
-      let groupQuals = {};
-      if (groupIds.length) {
-        const [qualRows] = await db.query(
-          `SELECT qgi.Qualificationgroupid, qgi.Qualificationid, q.Name
-           FROM Qualificationgroupitems qgi
-           JOIN Qualifications q ON qgi.Qualificationid = q.ID
-           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
-          groupIds
+      if (dateParam) {
+        // Show all assigned shifts for the employee for the given date (past or future)
+        const [shifts] = await db.query(
+          `SELECT css.*, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name AS clientname, 
+                  qg.Name AS qualificationgroupname
+           FROM Clientstaffshifts css
+           LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.ID
+           LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
+           LEFT JOIN Clients c ON cl.clientid = c.ID
+           LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
+           WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL AND csr.Shiftdate = ?
+           ORDER BY csr.Shiftdate DESC, csr.Starttime DESC`,
+          [userId, dateParam]
         );
-        // Map groupId -> [qualification names]
-        qualMap = groupIds.reduce((acc, gid) => {
-          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
-          return acc;
-        }, {});
-        // Map groupId -> [qualification IDs]
-        groupQuals = groupIds.reduce((acc, gid) => {
-          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Qualificationid);
-          return acc;
-        }, {});
-      }
-
-      // Step 5: Filter shifts by employee's qualifications
-      const qualifiedRows = uniqueRows.filter(row => {
-        const groupQ = groupQuals[row.Qualificationgroupid] || [];
-        // Employee is qualified if they have at least one qualification in the group
-        return groupQ.some(qid => empQualIds.includes(qid));
-      });
-
-      // Step 6: Paginate
-      const paginatedRows = qualifiedRows.slice((page - 1) * limit, (page - 1) * limit + limit);
-
-      // Step 7: Send raw UTC values as returned from DB (no formatting)
-      const formatted = paginatedRows.map(row => ({
-        ...row,
-        Shiftdate: row.Shiftdate,
-        Starttime: row.Starttime,
-        Endtime: row.Endtime,
-        qualificationname: qualMap[row.Qualificationgroupid] || []
-      }));
-      
-      // Debug log to see what's being returned
-      console.log('DEBUG: getAvailableClientShifts response structure:', {
-        availableShiftsCount: formatted.length,
-        sampleShift: formatted[0] || 'No shifts found',
-        pagination: { page, limit, total: qualifiedRows.length }
-      });
-      
-      // Return response based on format
-      if (responseFormat === 'simple') {
-        return res.status(200).json(formatted); // Just the array
+        // Format dates for frontend
+        const formatted = shifts.map(s => ({
+          ...s,
+          Shiftdate: s.Shiftdate ? formatDate(s.Shiftdate) : null,
+          Starttime: s.Starttime ? formatDateTime(s.Starttime) : null,
+          Endtime: s.Endtime ? formatDateTime(s.Endtime) : null
+        }));
+        return res.status(200).json({ availableShifts: formatted, pagination: { page: 1, limit: formatted.length, total: formatted.length } });
       } else {
-        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
+        // ... existing code for employee future/available shifts ...
+        // For Employee - Standard User:
+        // - Only show one open slot per shift (first available)
+        // - Hide shifts where user is already assigned (pending/approved/open)
+        // - Only include shifts for which the employee is qualified (via Qualificationgroupid)
+        // - Only show shifts for today or in the future
+
+        // Step 1: Get employee's active qualification IDs (not soft-deleted)
+        const [empQualRows] = await db.query(
+          `SELECT QualificationID FROM Staffqualifications WHERE Userid = ? AND Deletedat IS NULL`,
+          [userId]
+        );
+        const empQualIds = empQualRows.map(q => q.QualificationID);
+        if (empQualIds.length === 0) {
+          // Employee has no qualifications, so no shifts are available
+          return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
+        }
+
+        // Step 2: Get all open staff shifts not already assigned to this employee, for today or future
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const [rows] = await db.query(`
+          SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
+                 csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
+                 cl.LocationName, cl.LocationAddress, c.Name AS clientname
+          FROM Clientstaffshifts css
+          LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+          LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+          LEFT JOIN Clients c ON cl.clientid = c.id
+          WHERE css.Status = 'open' AND css.Deletedat IS NULL
+            AND csr.Shiftdate >= ?
+            AND css.Clientshiftrequestid NOT IN (
+              SELECT Clientshiftrequestid FROM Clientstaffshifts
+              WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
+            )
+          ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
+        `, [formatDate(today), userId]);
+
+        // Step 3: Group by shiftrequestid, pick only the first open slot per shift
+        const seenShiftIds = new Set();
+        const uniqueRows = [];
+        for (const row of rows) {
+          if (!seenShiftIds.has(row.Clientshiftrequestid)) {
+            uniqueRows.push(row);
+            seenShiftIds.add(row.Clientshiftrequestid);
+          }
+        }
+
+        // Step 4: Fetch qualifications for all qualificationgroupids
+        const groupIds = [...new Set(uniqueRows.map(r => r.Qualificationgroupid).filter(Boolean))];
+        let qualMap = {};
+        let groupQuals = {};
+        if (groupIds.length) {
+          const [qualRows] = await db.query(
+            `SELECT qgi.Qualificationgroupid, qgi.Qualificationid, q.Name
+             FROM Qualificationgroupitems qgi
+             JOIN Qualifications q ON qgi.Qualificationid = q.ID
+             WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+            groupIds
+          );
+          // Map groupId -> [qualification names]
+          qualMap = groupIds.reduce((acc, gid) => {
+            acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+            return acc;
+          }, {});
+          // Map groupId -> [qualification IDs]
+          groupQuals = groupIds.reduce((acc, gid) => {
+            acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Qualificationid);
+            return acc;
+          }, {});
+        }
+
+        // Step 5: Filter shifts by employee's qualifications
+        const qualifiedRows = uniqueRows.filter(row => {
+          const groupQ = groupQuals[row.Qualificationgroupid] || [];
+          // Employee is qualified if they have at least one qualification in the group
+          return groupQ.some(qid => empQualIds.includes(qid));
+        });
+
+        // Step 6: Paginate
+        const paginatedRows = qualifiedRows.slice((page - 1) * limit, (page - 1) * limit + limit);
+
+        // Step 7: Send raw UTC values as returned from DB (no formatting)
+        const formatted = paginatedRows.map(row => ({
+          ...row,
+          Shiftdate: row.Shiftdate,
+          Starttime: row.Starttime,
+          Endtime: row.Endtime,
+          qualificationname: qualMap[row.Qualificationgroupid] || []
+        }));
+        
+        // Debug log to see what's being returned
+        console.log('DEBUG: getAvailableClientShifts response structure:', {
+          availableShiftsCount: formatted.length,
+          sampleShift: formatted[0] || 'No shifts found',
+          pagination: { page, limit, total: qualifiedRows.length }
+        });
+        
+        // Return response based on format
+        if (responseFormat === 'simple') {
+          return res.status(200).json(formatted); // Just the array
+        } else {
+          return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
+        }
       }
     } else if (userType) {
       // If userType is present but not recognized, return 403
@@ -2041,7 +2083,8 @@ exports.updateClientShiftRequest = async (req, res) => {
     // Always update audit fields
     updates.push('Updatedat = ?');
     updates.push('Updatedbyid = ?');
-    params.push(now, userId);
+    params.push(now); // Updatedat (date)
+    params.push(userId); // Updatedbyid (user id)
     params.push(shiftId);
     
     // Validate that all updates contain only allowed field names to prevent SQL injection
