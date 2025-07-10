@@ -66,6 +66,8 @@ const corsOptions = {
     'https://console.firebase.google.com/project/rostermatic-b2ae0/overview',
     'https://rostermatic-b2ae0.firebaseapp.com/',
     'https://rostermatic-b2ae0.firebaseapp.com',
+    'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app/',
+    'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'cache-control'],

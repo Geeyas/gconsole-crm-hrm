@@ -314,7 +314,7 @@ exports.linkClientUserToSpecificLocationByEmail = async (req, res) => {
     }
     // Link user to location (Userclients row with clientlocationid)
     await db.query(
-      'INSERT INTO Userclients (userid, clientid, clientlocationid) VALUES (?, ?, ?)',
+      'INSERT INTO Userclients (userid, clientid, clientlocationid, Sysstarttime) VALUES (?, ?, ?, NOW())',
       [user.id, clientid, locationid]
     );
     res.status(201).json({ message: 'User linked to location successfully.' });
@@ -1355,7 +1355,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Users u ON csr.Createdbyid = u.id
         WHERE csr.deletedat IS NULL AND ${dateFilterSql}
-        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
         LIMIT ? OFFSET ?
       `, [...dateFilterParams, limit, offset]);
       // For each shift request, get its staff shifts and their statuses
@@ -1445,7 +1445,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Users u ON csr.Createdbyid = u.id
         ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')}) AND ${dateFilterSql}` : `WHERE csr.deletedat IS NULL AND ${dateFilterSql}`}
-        ORDER BY csr.Shiftdate DESC, csr.Starttime DESC
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
         LIMIT ? OFFSET ?
       `;
       const shiftParams = userType === 'Client - Standard User' ? [...clientIds, ...dateFilterParams, limit, offset] : [...dateFilterParams, limit, offset];
@@ -1524,7 +1524,7 @@ exports.getAvailableClientShifts = async (req, res) => {
            LEFT JOIN Clients c ON cl.clientid = c.ID
            LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
            WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL AND csr.Shiftdate = ?
-           ORDER BY csr.Shiftdate DESC, csr.Starttime DESC`,
+           ORDER BY csr.Shiftdate ASC, csr.Starttime ASC`,
           [userId, dateParam]
         );
         // Format dates for frontend
@@ -1571,7 +1571,7 @@ exports.getAvailableClientShifts = async (req, res) => {
               SELECT Clientshiftrequestid FROM Clientstaffshifts
               WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
             )
-          ORDER BY csr.Shiftdate DESC, csr.Starttime DESC, css.id ASC
+          ORDER BY csr.Shiftdate ASC, csr.Starttime ASC, css.id ASC
         `, [formatDate(today), userId]);
 
         // Step 3: Group by shiftrequestid, pick only the first open slot per shift
@@ -2271,7 +2271,7 @@ exports.getMyShifts = async (req, res) => {
        LEFT JOIN Clients c ON cl.clientid = c.ID
        LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
        WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL
-       ORDER BY csr.Shiftdate DESC, csr.Starttime DESC`,
+       ORDER BY csr.Shiftdate ASC, csr.Starttime ASC`,
       [userId]
     );
 
