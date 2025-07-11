@@ -783,6 +783,32 @@ curl -X GET https://your-api-domain/api/my-shifts \
       500: { message: 'Failed to remove employee from shift slot.' }
     },
     NOTE: 'This endpoint clears the assignment and approval fields for the slot, sets status to "open", and sends an email notification to the removed employee.'
+  },
+  {
+    method: 'POST',
+    path: '/api/contact-admin',
+    description: 'Contact Administrator: Sends an email to admin@ygit.tech and a confirmation to the user. No authentication required. Rate limited to 5 requests per 10 minutes per IP.',
+    bodyParams: ['email', 'subject', 'message', 'source (optional)'],
+    example: {
+      request: {
+        url: '/api/contact-admin',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: {
+          email: 'user@example.com',
+          subject: 'Need access to my account',
+          message: 'Hi, I can\'t log in to my account. Please assist.',
+          source: 'login-contact-modal'
+        }
+      },
+      responses: {
+        200: { success: true, message: 'Email sent successfully.' },
+        400: { success: false, error: 'Validation error.' },
+        429: { success: false, error: 'Too many requests, please try again later.' },
+        500: { success: false, error: 'Failed to send email. Please try again later.' }
+      }
+    },
+    NOTE: 'All fields required except source. Email is validated. Rate limited. Sends notification to admin@ygit.tech and confirmation to the user.'
   }
 ];
 

@@ -1,5 +1,7 @@
 const { pool: db } = require('../config/db');
 const winston = require('winston');
+const { sendMail } = require('../mailer/mailer');
+const mailTemplates = require('../mailer/templates');
 
 let validTables = new Set(); // Stores valid table names
 
@@ -211,5 +213,34 @@ exports.getPeoplePaginated = async (req, res) => {
   } catch (err) {
     logger.error('Fetch People paginated error', { error: err });
     res.status(500).json({ message: 'Fetch error', error: err.message, code: 'FETCH_ERROR' });
+  }
+};
+
+/**
+ * Handles POST /api/contact-admin
+ * Sends email to admin and confirmation to user
+ */
+exports.contactAdmin = async (req, res) => {
+  const { email, subject, message, source } = req.body;
+  try {
+    // Send to admin
+    const adminMail = mailTemplates.contactAdminNotification({ email, subject, message, source });
+    await sendMail({
+      to: 'admin@ygit.tech',
+      subject: adminMail.subject,
+      html: adminMail.html,
+      replyTo: email
+    });
+    // Send confirmation to user
+    const userMail = mailTemplates.contactAdminConfirmation({ email, subject });
+    await sendMail({
+      to: email,
+      subject: userMail.subject,
+      html: userMail.html
+    });
+    return res.status(200).json({ success: true, message: 'Email sent successfully.' });
+  } catch (err) {
+    console.error('Contact admin email error', err);
+    return res.status(500).json({ success: false, error: 'Failed to send email. Please try again later.' });
   }
 };

@@ -175,10 +175,10 @@ app.get('/api', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api', authRoutes);
-app.use('/api', clientRoutes); // Register clientRoutes before crudRoutes
+// Mount crudRoutes first so /api/contact-admin is public
 app.use('/api', crudRoutes);
+app.use('/api', authRoutes);
+app.use('/api', clientRoutes); // Register clientRoutes after authRoutes
 
 // Handle 404 for unknown API routes
 app.use('/api/', (req, res) => {

@@ -277,6 +277,91 @@ function shiftRemovedEmployee({ employeeName, clientName, locationName, shiftDat
   };
 }
 
+/**
+ * Contact Admin Notification (to admin)
+ * @param {Object} param0
+ * @param {string} param0.email - Sender's email
+ * @param {string} param0.subject - Subject from user
+ * @param {string} param0.message - Message body
+ * @param {string} [param0.source] - Source of the request (optional)
+ */
+function contactAdminNotification({ email, subject, message, source }) {
+  return {
+    subject: `[Contact Form] ${subject}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <div style="text-align:center; margin-bottom: 20px;">
+          <span style="display:inline-block; font-size:2rem; font-weight:bold; line-height:1;">
+            <svg width="110" height="36" viewBox="0 0 110 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+              <defs>
+                <linearGradient id="shiftly-gradient" x1="0" y1="0" x2="110" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2563eb"/>
+                  <stop offset="1" stop-color="#14b8a6"/>
+                </linearGradient>
+              </defs>
+              <text x="0" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="bold" fill="url(#shiftly-gradient)">Shiftly</text>
+            </svg>
+          </span>
+        </div>
+        <h2 style="color: #1976d2; text-align: center;">New Contact Form Submission</h2>
+        <p style="font-size: 15px;">You have received a new message from the contact form.</p>
+        <div style="background: #f4f6f8; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p><strong>From:</strong> <a href="mailto:${email}">${email}</a></p>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <p><strong>Message:</strong></p>
+          <pre style="background: #fff; border: 1px solid #eee; border-radius: 4px; padding: 12px; font-size: 15px; white-space: pre-wrap;">${message}</pre>
+          ${source ? `<p style='color:#888; font-size:13px;'><strong>Source:</strong> ${source}</p>` : ''}
+        </div>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
+/**
+ * Contact Admin Confirmation (to user)
+ * @param {Object} param0
+ * @param {string} param0.email - Sender's email
+ * @param {string} param0.subject - Subject from user
+ */
+function contactAdminConfirmation({ email, subject }) {
+  return {
+    subject: `We have received your message – Shiftly Support` ,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <div style="text-align:center; margin-bottom: 20px;">
+          <span style="display:inline-block; font-size:2rem; font-weight:bold; line-height:1;">
+            <svg width="110" height="36" viewBox="0 0 110 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+              <defs>
+                <linearGradient id="shiftly-gradient" x1="0" y1="0" x2="110" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2563eb"/>
+                  <stop offset="1" stop-color="#14b8a6"/>
+                </linearGradient>
+              </defs>
+              <text x="0" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="bold" fill="url(#shiftly-gradient)">Shiftly</text>
+            </svg>
+          </span>
+        </div>
+        <h2 style="color: #14b8a6; text-align: center;">Thank You for Contacting Shiftly Support</h2>
+        <p style="font-size: 15px;">Dear ${email},</p>
+        <p style="font-size: 15px; line-height: 1.6;">We have received your message regarding: <strong>${subject}</strong></p>
+        <p style="font-size: 15px;">Our support team has received your request and will get back to you as soon as possible. If your inquiry is urgent, please reply to this email or contact us at <a href='mailto:admin@ygit.tech'>admin@ygit.tech</a>.</p>
+        <div style="background: #f4f6f8; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="font-size: 14px; color: #1976d2; margin: 0;">This is a confirmation that your message has been received by our team.</p>
+        </div>
+        <p style="font-size: 15px;">Thank you for reaching out to Shiftly.<br/>Best regards,<br/>The Shiftly Support Team</p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
 module.exports = {
   shiftAcceptedClient,
   shiftApprovedEmployee,
@@ -285,5 +370,7 @@ module.exports = {
   formatDateTimeForEmail,
   shiftNewEmployee,
   shiftUpdatedEmployee,
-  shiftRemovedEmployee
+  shiftRemovedEmployee,
+  contactAdminNotification,
+  contactAdminConfirmation
 };

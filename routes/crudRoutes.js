@@ -4,6 +4,8 @@ const router = express.Router();
 const crudController = require('../controllers/crudController');
 const authController = require('../controllers/authController');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
+const { contactAdminValidation, handleValidationErrors } = require('../middleware/validation');
 
 // Validation middleware for create/update
 function validateCrudFields(req, res, next) {
@@ -19,6 +21,18 @@ function validateCrudFields(req, res, next) {
   }
   next();
 }
+
+// Rate limiter for contact-admin (5 requests per 10 minutes per IP)
+const contactAdminLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5,
+  message: { success: false, error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Contact Admin endpoint (public, no auth)
+router.post('/contact-admin', contactAdminLimiter, contactAdminValidation, handleValidationErrors, crudController.contactAdmin);
 
 // router.get('/:table/paginated', crudController.getAllPaginated);
 router.get('/:table/paginated', crudController.getAllPaginated);

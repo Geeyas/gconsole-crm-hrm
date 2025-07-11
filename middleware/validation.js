@@ -163,6 +163,23 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
+const contactAdminValidation = [
+  sanitizeEmail,
+  body('email')
+    .notEmpty().withMessage('Email is required')
+    .isEmail().withMessage('Invalid email format')
+    .isLength({ max: 255 }).withMessage('Email too long'),
+  body('subject')
+    .notEmpty().withMessage('Subject is required')
+    .isLength({ min: 3, max: 200 }).withMessage('Subject must be 3-200 characters'),
+  body('message')
+    .notEmpty().withMessage('Message is required')
+    .isLength({ min: 5, max: 2000 }).withMessage('Message must be 5-2000 characters'),
+  body('source')
+    .optional()
+    .isLength({ max: 100 }).withMessage('Source must be at most 100 characters')
+];
+
 module.exports = {
   createShiftValidation,
   registerValidation,
@@ -174,5 +191,6 @@ module.exports = {
   handleValidationErrors,
   sanitizeEmail,
   sanitizeUsername,
-  sanitizePhone
+  sanitizePhone,
+  contactAdminValidation
 };
