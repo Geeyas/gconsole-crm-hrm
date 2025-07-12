@@ -31,8 +31,7 @@ const contactAdminLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Contact Admin endpoint (public, no auth)
-router.post('/contact-admin', contactAdminLimiter, contactAdminValidation, handleValidationErrors, crudController.contactAdmin);
+// router.post('/contact-admin', contactAdminLimiter, contactAdminValidation, handleValidationErrors, crudController.contactAdmin);
 
 // router.get('/:table/paginated', crudController.getAllPaginated);
 router.get('/:table/paginated', crudController.getAllPaginated);

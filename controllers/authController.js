@@ -330,6 +330,14 @@ const { hashPassword, verifyPassword, migrateLegacyHash, generateSalt } = requir
 const winston = require('winston');
 const { sendMail } = require('../mailer/mailer');
 const mailTemplates = require('../mailer/templates');
+const { DateTime } = require('luxon');
+const { 
+  toUTC, 
+  formatForMySQL, 
+  utcToMelbourneForAPI, 
+  formatDate, 
+  formatDateTime 
+} = require('../utils/timezoneUtils');
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -345,17 +353,7 @@ const logger = winston.createLogger({
 });
 
 // Date formatting helpers for shift endpoints
-function formatDate(date) {
-  if (!date) return null;
-  const d = new Date(date);
-  return d.toISOString().split('T')[0]; // YYYY-MM-DD
-}
 
-function formatDateTime(date) {
-  if (!date) return null;
-  const d = new Date(date);
-  return d.toISOString().replace('T', ' ').substring(0, 16); // YYYY-MM-DD HH:mm
-}
 
 // ================== login ==================
 // Authenticates a user and returns a JWT token if credentials are valid.
@@ -607,8 +605,8 @@ exports.register = async (req, res) => {
     const fullname = `${firstname} ${lastname}`;
 
     const [peopleResult] = await db.query(
-      `INSERT INTO People (Firstname, Lastname, Emailaddress, Hiredate, Createdat, Createdbyid, Updatedat, Updatedbyid)
-       VALUES (?, ?, ?, NOW(), NOW(), ?, NOW(), ?)`,
+      `INSERT INTO People (Firstname, Lastname, Emailaddress, Hiredate, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
+       VALUES (?, ?, ?, NOW(), NOW(), ?, NOW(), ?, NOW())`,
       [firstname, lastname, email, creatorId, creatorId]
     );
 
@@ -765,37 +763,42 @@ exports.updateUserProfile = async (req, res) => {
     return res.status(403).json({ message: 'Access denied: Only staff/admin or the user themselves can update this record.' });
   }
 
-  // Extract all fields for People table (full schema)
-  const {
-    Firstname,
-    Lastname,
-    Middlename,
-    Preferredname,
-    Emailaddress,
-    Contact,
-    Country,
-    State,
-    Suburb,
-    Postcode,
-    HomeAddress,
-    Workaddress,
-    Phonemobile,
-    Phonehome,
-    Phonework,
-    Gender,
-    Issubcontractor,
-    Isaustraliantaxresident,
-    Isworkingholidaymarker,
-    Isterminated,
-    Hasvehicle,
-    Terminatedat,
-    TFN,
-    ABN,
-    BSB,
-    Bankaccountnumber,
-    SuperfundID,
-    AdditionalInformation
-  } = req.body;
+  // Map payload fields (accept both lowercase and capitalized)
+  const updateFields = {
+    Firstname: getField(req.body, 'Firstname'),
+    Lastname: getField(req.body, 'Lastname'),
+    Middlename: getField(req.body, 'Middlename'),
+    Preferredname: getField(req.body, 'Preferredname'),
+    Emailaddress: getField(req.body, 'Emailaddress'),
+    Contact: getField(req.body, 'Contact'),
+    Country: getField(req.body, 'Country'),
+    State: getField(req.body, 'State'),
+    Suburb: getField(req.body, 'Suburb'),
+    Postcode: getField(req.body, 'Postcode'),
+    HomeAddress: getField(req.body, 'HomeAddress'),
+    Workaddress: getField(req.body, 'Workaddress'),
+    Phonemobile: getField(req.body, 'Phonemobile'),
+    Phonehome: getField(req.body, 'Phonehome'),
+    Phonework: getField(req.body, 'Phonework'),
+    Gender: getField(req.body, 'Gender'),
+    Issubcontractor: getField(req.body, 'Issubcontractor'),
+    Isaustraliantaxresident: getField(req.body, 'Isaustraliantaxresident'),
+    Isworkingholidaymarker: getField(req.body, 'Isworkingholidaymarker'),
+    Isterminated: getField(req.body, 'Isterminated'),
+    Hasvehicle: getField(req.body, 'Hasvehicle'),
+    Terminatedat: getField(req.body, 'Terminatedat'),
+    TFN: getField(req.body, 'TFN'),
+    ABN: getField(req.body, 'ABN'),
+    BSB: getField(req.body, 'BSB'),
+    Bankaccountnumber: getField(req.body, 'Bankaccountnumber'),
+    SuperfundID: getField(req.body, 'SuperfundID'),
+    AdditionalInformation: getField(req.body, 'AdditionalInformation')
+  };
+
+  // Validate required fields
+  if (!updateFields.Firstname || !updateFields.Lastname) {
+    return res.status(400).json({ message: 'Firstname and Lastname are required.' });
+  }
 
   try {
     // Update People table with all fields
@@ -810,28 +813,31 @@ exports.updateUserProfile = async (req, res) => {
         Updatedat = NOW(), Updatedbyid = ?
        WHERE ID = ?`,
       [
-        Firstname, Lastname, Middlename, Preferredname, Emailaddress,
-        Contact, Country, State, Suburb, Postcode, HomeAddress, Workaddress,
-        Phonemobile, Phonehome, Phonework, Gender,
-        Issubcontractor, Isaustraliantaxresident, Isworkingholidaymarker, Isterminated, Hasvehicle,
-        Terminatedat, TFN, ABN, BSB, Bankaccountnumber, SuperfundID,
-        AdditionalInformation,
+        updateFields.Firstname, updateFields.Lastname, updateFields.Middlename, updateFields.Preferredname, updateFields.Emailaddress,
+        updateFields.Contact, updateFields.Country, updateFields.State, updateFields.Suburb, updateFields.Postcode, updateFields.HomeAddress, updateFields.Workaddress,
+        updateFields.Phonemobile, updateFields.Phonehome, updateFields.Phonework, updateFields.Gender,
+        updateFields.Issubcontractor, updateFields.Isaustraliantaxresident, updateFields.Isworkingholidaymarker, updateFields.Isterminated, updateFields.Hasvehicle,
+        updateFields.Terminatedat, updateFields.TFN, updateFields.ABN, updateFields.BSB, updateFields.Bankaccountnumber, updateFields.SuperfundID,
+        updateFields.AdditionalInformation,
         updaterId, personId
       ]
     );
 
     // If linked user exists, update Users table as well
     if (linkedUserId) {
-      const fullname = `${Firstname} ${Lastname}`;
+      const userEmail = updateFields.Emailaddress || getField(req.body, 'email');
+      if (!userEmail) {
+        return res.status(400).json({ message: 'Email is required for user profile.' });
+      }
+      const fullname = `${updateFields.Firstname} ${updateFields.Lastname}`;
       await db.query(
         `UPDATE Users SET fullname = ?, email = ?, username = ?, updatedat = NOW(), updatedbyid = ? WHERE id = ?`,
-        [fullname, Emailaddress, Emailaddress, updaterId, linkedUserId]
+        [fullname, userEmail, userEmail, updaterId, linkedUserId]
       );
     }
 
     res.status(200).json({ message: 'User profile updated successfully' });
   } catch (err) {
-    // Improved error logging for debugging
     logger.error('Update error', {
       error: err,
       message: err && err.message,
@@ -840,8 +846,17 @@ exports.updateUserProfile = async (req, res) => {
       code: err && err.code,
       full: JSON.stringify(err)
     });
+    // Provide a clear error message to the frontend
+    let userMessage = 'Failed to update profile.';
+    if (err && err.code === 'ER_BAD_NULL_ERROR') {
+      userMessage = 'A required field is missing. Please check all required fields.';
+    } else if (err && err.code === 'ER_DUP_ENTRY') {
+      userMessage = 'A unique field value already exists. Please use a different value.';
+    } else if (err && err.sqlMessage) {
+      userMessage = err.sqlMessage;
+    }
     res.status(500).json({
-      message: 'Failed to update profile',
+      message: userMessage,
       error: err && err.message,
       stack: err && err.stack,
       sql: err && err.sql,
@@ -880,6 +895,11 @@ exports.getMyPeopleInfo = async (req, res) => {
 
 // ================== createClientShiftRequest ==================
 // Creates a new client shift request and related staff shifts.
+//
+// TIMEZONE POLICY:
+// - All times (shiftdate, starttime, endtime) received from the frontend are interpreted as Australia/Melbourne time.
+// - All times are converted to UTC before storing in the database.
+// - All times sent to the frontend are converted from UTC to Australia/Melbourne time and formatted as strings.
 exports.createClientShiftRequest = async (req, res) => {
   const dbConn = db;
   const {
@@ -897,36 +917,10 @@ exports.createClientShiftRequest = async (req, res) => {
   const userType = req.user?.usertype;
 
   // --- Ensure all date/time fields are stored as UTC ---
-  function toUTC(val) {
-    if (!val) return null;
-    // If only date (YYYY-MM-DD), treat as midnight local and convert to UTC
-    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-      const d = new Date(val + 'T00:00:00Z');
-      return d;
-    }
-    // If date and time (YYYY-MM-DD HH:mm), treat as local and convert to UTC
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) {
-      const [date, time] = val.split(' ');
-      const d = new Date(date + 'T' + time + ':00Z');
-      return d;
-    }
-    // If already ISO string, parse as date
-    const d = new Date(val);
-    return isNaN(d) ? null : d;
-  }
-  function formatForMySQL(dt) {
-    if (!dt || isNaN(dt.getTime())) return null;
-    // Returns 'YYYY-MM-DD HH:mm:ss' in UTC
-    return dt.getUTCFullYear() + '-' +
-      String(dt.getUTCMonth() + 1).padStart(2, '0') + '-' +
-      String(dt.getUTCDate()).padStart(2, '0') + ' ' +
-      String(dt.getUTCHours()).padStart(2, '0') + ':' +
-      String(dt.getUTCMinutes()).padStart(2, '0') + ':' +
-      String(dt.getUTCSeconds()).padStart(2, '0');
-  }
-  const shiftdateUTC = formatForMySQL(toUTC(shiftdate));
-  const starttimeUTC = formatForMySQL(toUTC(starttime));
-  const endtimeUTC = formatForMySQL(toUTC(endtime));
+  // All times received from frontend are in Melbourne time
+  const shiftdateForDB = normalizeDate(shiftdate);
+  const starttimeForDB = normalizeDateTime(starttime);
+  const endtimeForDB = normalizeDateTime(endtime);
 
   try {
     // Get Clientid from Clientlocations (case sensitive)
@@ -956,9 +950,9 @@ exports.createClientShiftRequest = async (req, res) => {
 
     // Insert into Clientshiftrequests (case sensitive columns)
     const insertShiftSql = `INSERT INTO Clientshiftrequests
-      (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const insertShiftParams = [clientid, clientlocationid, shiftdateUTC, starttimeUTC, endtimeUTC, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid];
+      (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const insertShiftParams = [clientid, clientlocationid, shiftdateForDB, starttimeForDB, endtimeForDB, qualificationgroupid, totalrequiredstaffnumber, additionalvalue, now, createdbyid, now, updatedbyid, now];
     const [result] = await dbConn.query(insertShiftSql, insertShiftParams);
     const clientshiftrequestid = result.insertId;
 
@@ -973,16 +967,17 @@ exports.createClientShiftRequest = async (req, res) => {
         now,
         createdbyid,
         now,
-        updatedbyid
+        updatedbyid,
+        now // Sysstarttime
       ]);
     }
     if (staffShiftInserts.length) {
       try {
         // Build placeholders for bulk insert
-        const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
         const flatValues = staffShiftInserts.flat();
         const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
-          '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
+          '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime) VALUES ' + placeholders;
         await dbConn.query(staffShiftSql, flatValues);
       } catch (err) {
         logger.error('Error inserting into Clientstaffshifts', { error: err, attemptedSql: 'bulk insert', values: staffShiftInserts });
@@ -1033,24 +1028,6 @@ exports.createClientShiftRequest = async (req, res) => {
       const shift = createdShift[0];
       const locationName = shift.LocationName || '';
       const clientName = shift.clientname || '';
-      // Format date/time for email readability
-      function toISO(val) {
-        if (!val) return '';
-        const d = new Date(val);
-        return isNaN(d) ? val : d.toISOString();
-      }
-      function formatForEmail(val) {
-        if (!val) return '';
-        const d = new Date(val);
-        if (isNaN(d)) return val;
-        return d.toLocaleString('en-AU', {
-          weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Australia/Perth'
-        });
-      }
-      const shiftDateEmail = formatForEmail(toISO(shift.Shiftdate));
-      const startTimeEmail = formatForEmail(toISO(shift.Starttime));
-      const endTimeEmail = formatForEmail(toISO(shift.Endtime));
       // Await all emails before responding
       await Promise.all(qualifiedEmployeeRows.map(async (emp) => {
         logger.info('Sending shift notification email', { to: emp.email });
@@ -1058,9 +1035,9 @@ exports.createClientShiftRequest = async (req, res) => {
           employeeName: emp.fullname,
           locationName,
           clientName,
-          shiftDate: shiftDateEmail,
-          startTime: startTimeEmail,
-          endTime: endTimeEmail,
+          shiftDate: shift.Shiftdate,
+          startTime: shift.Starttime,
+          endTime: shift.Endtime,
           qualificationNames: qualificationname
         });
         try {
@@ -1310,6 +1287,9 @@ exports.softDeletePerson = async (req, res) => {
 
 // ================== getAvailableClientShifts ==================
 // Returns available client shifts based on user type and permissions.
+//
+// TIMEZONE POLICY:
+// - All times sent to the frontend are converted from UTC to Australia/Melbourne time and formatted as strings.
 exports.getAvailableClientShifts = async (req, res) => {
   const userType = req.user?.usertype;
   const userId = req.user?.id;
@@ -1324,344 +1304,258 @@ exports.getAvailableClientShifts = async (req, res) => {
 
   // Date filter logic
   const dateParam = req.query.date;
+  const allParam = req.query.all === 'true';
   let dateFilterSql, dateFilterParams;
-  if (dateParam) {
-    dateFilterSql = 'csr.Shiftdate = ?';
+  if ((userType === 'System Admin' || userType === 'Staff - Standard User') && allParam) {
+    // Admin/staff requested all shifts, no date filter
+    dateFilterSql = '1=1';
+    dateFilterParams = [];
+    // Get all non-deleted shifts
+    const [rows] = await db.query(
+      `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+             u.fullname AS creatorName
+      FROM Clientshiftrequests csr
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON csr.Createdbyid = u.id
+      WHERE csr.deletedat IS NULL
+      ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
+    // For each shift request, get its staff shifts (all statuses)
+    const shiftIds = rows.map(row => row.shiftrequestid);
+    let staffShifts = [];
+    if (shiftIds.length) {
+      const [staffRows] = await db.query(
+        `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+         FROM Clientstaffshifts css
+         LEFT JOIN Users u ON css.Assignedtouserid = u.id
+         WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+        shiftIds
+      );
+      staffShifts = staffRows; // No filter on status
+    }
+    // Group staff shifts by shiftrequestid
+    const staffShiftsByRequest = {};
+    staffShifts.forEach(s => {
+      if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
+      staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+    });
+    // Fetch qualifications for all qualificationgroupids
+    const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+    let qualMap = {};
+    if (groupIds.length) {
+      const [qualRows] = await db.query(
+        `SELECT qgi.Qualificationgroupid, q.Name
+         FROM Qualificationgroupitems qgi
+         JOIN Qualifications q ON qgi.Qualificationid = q.ID
+         WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+        groupIds
+      );
+      qualMap = groupIds.reduce((acc, gid) => {
+        acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+        return acc;
+      }, {});
+    }
+    // Convert UTC times to Melbourne time for API response
+    const formatted = rows.map(row => ({
+      ...row,
+      Shiftdate: row.Shiftdate,
+      Starttime: row.Starttime,
+      Endtime: row.Endtime,
+      qualificationname: qualMap[row.Qualificationgroupid] || [],
+      StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
+    }));
+    // Get total count of all non-deleted shifts (always show complete count)
+    const [countResult] = await db.query(
+      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL`
+    );
+    const total = countResult[0]?.total || 0;
+    // Return response based on format
+    if (responseFormat === 'simple') {
+      return res.status(200).json(formatted);
+    } else {
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+    }
+  } else if (dateParam) {
+    // When a specific date is requested, we need to handle the date format properly
+    // The database might store dates in different formats, so we use DATE() function
+    dateFilterSql = 'DATE(csr.Shiftdate) = ?';
     dateFilterParams = [dateParam];
+    // Get total count
+    const [countResult] = await db.query(
+      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
+      dateFilterParams
+    );
+    total = countResult[0]?.total || 0;
+    // Admin/Staff: See all shifts for all hospitals/locations
+    [rows] = await db.query(
+      `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+             u.fullname AS creatorName
+      FROM Clientshiftrequests csr
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON csr.Createdbyid = u.id
+      WHERE csr.deletedat IS NULL AND ${dateFilterSql}
+      ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+      LIMIT ? OFFSET ?
+    `, [...dateFilterParams, limit, offset]);
+    // For each shift request, get its staff shifts and their statuses
+    const shiftIds = rows.map(row => row.shiftrequestid);
+    let staffShifts = [];
+    if (shiftIds.length) {
+      const [staffRows] = await db.query(
+        `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+         FROM Clientstaffshifts css
+         LEFT JOIN Users u ON css.Assignedtouserid = u.id
+         WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+        shiftIds
+      );
+      // Filter out soft-deleted slots in code (defensive)
+      staffShifts = staffRows.filter(s => !s.Deletedat);
+    }
+    // Group staff shifts by shiftrequestid
+    const staffShiftsByRequest = {};
+    staffShifts.forEach(s => {
+      if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
+      // Defensive: filter out soft-deleted slots
+      if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
+    });
+    // Fetch qualifications for all qualificationgroupids
+    const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+    let qualMap = {};
+    if (groupIds.length) {
+      const [qualRows] = await db.query(
+        `SELECT qgi.Qualificationgroupid, q.Name
+         FROM Qualificationgroupitems qgi
+         JOIN Qualifications q ON qgi.Qualificationid = q.ID
+         WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+        groupIds
+      );
+      qualMap = groupIds.reduce((acc, gid) => {
+        acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+        return acc;
+      }, {});
+    }
+    // Return raw DB values for date/time fields (no conversion)
+    const formatted = rows
+      .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
+      .map(row => {
+        return {
+          ...row,
+          Shiftdate: row.Shiftdate,
+          Starttime: row.Starttime,
+          Endtime: row.Endtime,
+          qualificationname: qualMap[row.Qualificationgroupid] || [],
+          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
+        };
+      });
+    
+    // Debug log to see what's being returned
+    console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
+      availableShiftsCount: formatted.length,
+      sampleShift: formatted[0] || 'No shifts found',
+      pagination: { page, limit, total }
+    });
+    
+    // Return response based on format
+    if (responseFormat === 'simple') {
+      return res.status(200).json(formatted); // Just the array
+    } else {
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+    }
   } else {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    // Get today's date in Melbourne timezone to avoid timezone issues
+    const today = DateTime.now().setZone('Australia/Melbourne').startOf('day');
+    const todayStr = today.toFormat('yyyy-MM-dd');
     dateFilterSql = 'csr.Shiftdate >= ?';
     dateFilterParams = [todayStr];
-  }
-
-  try {
-    let rows, total;
-    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
-      // Get total count
-      const [countResult] = await db.query(
-        `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
-        dateFilterParams
+    // Get total count
+    const [countResult] = await db.query(
+      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
+      dateFilterParams
+    );
+    total = countResult[0]?.total || 0;
+    // Admin/Staff: See all shifts for all hospitals/locations
+    [rows] = await db.query(
+      `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+             u.fullname AS creatorName
+      FROM Clientshiftrequests csr
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      LEFT JOIN Users u ON csr.Createdbyid = u.id
+      WHERE csr.deletedat IS NULL AND ${dateFilterSql}
+      ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+      LIMIT ? OFFSET ?
+    `, [...dateFilterParams, limit, offset]);
+    // For each shift request, get its staff shifts and their statuses
+    const shiftIds = rows.map(row => row.shiftrequestid);
+    let staffShifts = [];
+    if (shiftIds.length) {
+      const [staffRows] = await db.query(
+        `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+         FROM Clientstaffshifts css
+         LEFT JOIN Users u ON css.Assignedtouserid = u.id
+         WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+        shiftIds
       );
-      total = countResult[0]?.total || 0;
-      // Admin/Staff: See all shifts for all hospitals/locations
-      [rows] = await db.query(
-        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
-               u.fullname AS creatorName
-        FROM Clientshiftrequests csr
-        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-        LEFT JOIN Clients c ON cl.clientid = c.id
-        LEFT JOIN Users u ON csr.Createdbyid = u.id
-        WHERE csr.deletedat IS NULL AND ${dateFilterSql}
-        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
-        LIMIT ? OFFSET ?
-      `, [...dateFilterParams, limit, offset]);
-      // For each shift request, get its staff shifts and their statuses
-      const shiftIds = rows.map(row => row.shiftrequestid);
-      let staffShifts = [];
-      if (shiftIds.length) {
-        const [staffRows] = await db.query(
-          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
-           FROM Clientstaffshifts css
-           LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
-          shiftIds
-        );
-        // Filter out soft-deleted slots in code (defensive)
-        staffShifts = staffRows.filter(s => !s.Deletedat);
-      }
-      // Group staff shifts by shiftrequestid
-      const staffShiftsByRequest = {};
-      staffShifts.forEach(s => {
-        if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
-        // Defensive: filter out soft-deleted slots
-        if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
-      });
-      // Fetch qualifications for all qualificationgroupids
-      const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
-      let qualMap = {};
-      if (groupIds.length) {
-        const [qualRows] = await db.query(
-          `SELECT qgi.Qualificationgroupid, q.Name
-           FROM Qualificationgroupitems qgi
-           JOIN Qualifications q ON qgi.Qualificationid = q.ID
-           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
-          groupIds
-        );
-        qualMap = groupIds.reduce((acc, gid) => {
-          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
-          return acc;
-        }, {});
-      }
-      // Show all shifts (no date filter)
-      const filteredRows = rows.filter(row => !row.Deletedat);
-      // Send raw UTC values as returned from DB (no formatting)
-      const formatted = filteredRows
-        .map(row => ({
-          ...row,
-          // Send as-is (raw DB values, assumed UTC)
-          Shiftdate: row.Shiftdate,
-          Starttime: row.Starttime,
-          Endtime: row.Endtime,
-          qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
-          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
-        }));
-      
-      // Debug log to see what's being returned
-      console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
-        availableShiftsCount: formatted.length,
-        sampleShift: formatted[0] || 'No shifts found',
-        pagination: { page, limit, total }
-      });
-      
-      // Return response based on format
-      if (responseFormat === 'simple') {
-        return res.status(200).json(formatted); // Just the array
-      } else {
-        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
-      }
-    } else if (userType === 'Client - Standard User' || userType === 'System Admin' || userType === 'Staff - Standard User') {
-      let clientIds = [];
-      if (userType === 'Client - Standard User') {
-        const [clientRows] = await db.query('SELECT clientid FROM Userclients WHERE userid = ?', [userId]);
-        if (!clientRows.length) return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
-        clientIds = clientRows.map(r => r.clientid);
-      }
-      // Get total count
-      const countQuery = userType === 'Client - Standard User'
-        ? `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')}) AND ${dateFilterSql}`
-        : `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`;
-      const countParams = userType === 'Client - Standard User' ? [...clientIds, ...dateFilterParams] : dateFilterParams;
-      const [countResult] = await db.query(countQuery, countParams);
-      total = countResult[0]?.total || 0;
-      const shiftQuery = `
-        SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
-               u.fullname AS creatorName
-        FROM Clientshiftrequests csr
-        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-        LEFT JOIN Clients c ON cl.clientid = c.id
-        LEFT JOIN Users u ON csr.Createdbyid = u.id
-        ${userType === 'Client - Standard User' ? `WHERE csr.deletedat IS NULL AND csr.clientid IN (${clientIds.map(() => '?').join(',')}) AND ${dateFilterSql}` : `WHERE csr.deletedat IS NULL AND ${dateFilterSql}`}
-        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
-        LIMIT ? OFFSET ?
-      `;
-      const shiftParams = userType === 'Client - Standard User' ? [...clientIds, ...dateFilterParams, limit, offset] : [...dateFilterParams, limit, offset];
-      const [shiftRows] = await db.query(shiftQuery, shiftParams);
-      // For each shift request, get its staff shifts and their statuses
-      const shiftIds = shiftRows.map(row => row.shiftrequestid);
-      let staffShifts = [];
-      if (shiftIds.length) {
-        const [staffRows] = await db.query(
-          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
-           FROM Clientstaffshifts css
-           LEFT JOIN Users u ON css.Assignedtouserid = u.id
-           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
-          shiftIds
-        );
-        // Filter out soft-deleted slots in code (defensive)
-        staffShifts = staffRows.filter(s => !s.Deletedat);
-      }
-      // Group staff shifts by shiftrequestid
-      const staffShiftsByRequest = {};
-      staffShifts.forEach(s => {
-        if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
-        // Defensive: filter out soft-deleted slots
-        if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
-      });
-      // Fetch qualifications for all qualificationgroupids
-      const groupIds = [...new Set(shiftRows.map(r => r.Qualificationgroupid).filter(Boolean))];
-      let qualMap = {};
-      if (groupIds.length) {
-        const [qualRows] = await db.query(
-          `SELECT qgi.Qualificationgroupid, q.Name
-           FROM Qualificationgroupitems qgi
-           JOIN Qualifications q ON qgi.Qualificationid = q.ID
-           WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
-          groupIds
-        );
-        qualMap = groupIds.reduce((acc, gid) => {
-          acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
-          return acc;
-        }, {});
-      }
-      // Send raw UTC values as returned from DB (no formatting)
-      const formatted = shiftRows
-        .filter(row => !row.Deletedat) // Defensive: filter out soft-deleted parent shifts
-        .map(row => ({
-          ...row,
-          Shiftdate: row.Shiftdate,
-          Starttime: row.Starttime,
-          Endtime: row.Endtime,
-          qualificationname: qualMap[row.Qualificationgroupid] || [], // keep variable name
-          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
-        }));
-      
-      // Debug log to see what's being returned
-      console.log('DEBUG: getAvailableClientShifts (Client/Admin/Staff) response structure:', {
-        availableShiftsCount: formatted.length,
-        sampleShift: formatted[0] || 'No shifts found',
-        pagination: { page, limit, total }
-      });
-      
-      // Return response based on format
-      if (responseFormat === 'simple') {
-        return res.status(200).json(formatted); // Just the array
-      } else {
-        return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
-      }
-    } else if (userType === 'Employee - Standard User') {
-      if (dateParam) {
-        // Show all assigned shifts for the employee for the given date (past or future)
-        const [shifts] = await db.query(
-          `SELECT css.*, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name AS clientname, 
-                  qg.Name AS qualificationgroupname
-           FROM Clientstaffshifts css
-           LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.ID
-           LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
-           LEFT JOIN Clients c ON cl.clientid = c.ID
-           LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
-           WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL AND csr.Shiftdate = ?
-           ORDER BY csr.Shiftdate ASC, csr.Starttime ASC`,
-          [userId, dateParam]
-        );
-        // Format dates for frontend
-        const formatted = shifts.map(s => ({
-          ...s,
-          Shiftdate: s.Shiftdate ? formatDate(s.Shiftdate) : null,
-          Starttime: s.Starttime ? formatDateTime(s.Starttime) : null,
-          Endtime: s.Endtime ? formatDateTime(s.Endtime) : null
-        }));
-        return res.status(200).json({ availableShifts: formatted, pagination: { page: 1, limit: formatted.length, total: formatted.length } });
-      } else {
-        // ... existing code for employee future/available shifts ...
-        // For Employee - Standard User:
-        // - Only show one open slot per shift (first available)
-        // - Hide shifts where user is already assigned (pending/approved/open)
-        // - Only include shifts for which the employee is qualified (via Qualificationgroupid)
-        // - Only show shifts for today or in the future
-
-        // Step 1: Get employee's active qualification IDs (not soft-deleted)
-        const [empQualRows] = await db.query(
-          `SELECT QualificationID FROM Staffqualifications WHERE Userid = ? AND Deletedat IS NULL`,
-          [userId]
-        );
-        const empQualIds = empQualRows.map(q => q.QualificationID);
-        if (empQualIds.length === 0) {
-          // Employee has no qualifications, so no shifts are available
-          return res.status(200).json({ availableShifts: [], pagination: { page, limit, total: 0 } });
-        }
-
-        // Step 2: Get all open staff shifts not already assigned to this employee, for today or future
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const [rows] = await db.query(`
-          SELECT css.id AS staffshiftid, css.Clientshiftrequestid, css.Clientid, css.Status, css.Order,
-                 csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid,
-                 cl.LocationName, cl.LocationAddress, c.Name AS clientname
-          FROM Clientstaffshifts css
-          LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
-          LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-          LEFT JOIN Clients c ON cl.clientid = c.id
-          WHERE css.Status = 'open' AND css.Deletedat IS NULL
-            AND csr.Shiftdate >= ?
-            AND css.Clientshiftrequestid NOT IN (
-              SELECT Clientshiftrequestid FROM Clientstaffshifts
-              WHERE Assignedtouserid = ? AND Deletedat IS NULL AND Status IN ('pending approval', 'approved', 'open')
-            )
-          ORDER BY csr.Shiftdate ASC, csr.Starttime ASC, css.id ASC
-        `, [formatDate(today), userId]);
-
-        // Step 3: Group by shiftrequestid, pick only the first open slot per shift
-        const seenShiftIds = new Set();
-        const uniqueRows = [];
-        for (const row of rows) {
-          if (!seenShiftIds.has(row.Clientshiftrequestid)) {
-            uniqueRows.push(row);
-            seenShiftIds.add(row.Clientshiftrequestid);
-          }
-        }
-
-        // Step 4: Fetch qualifications for all qualificationgroupids
-        const groupIds = [...new Set(uniqueRows.map(r => r.Qualificationgroupid).filter(Boolean))];
-        let qualMap = {};
-        let groupQuals = {};
-        if (groupIds.length) {
-          const [qualRows] = await db.query(
-            `SELECT qgi.Qualificationgroupid, qgi.Qualificationid, q.Name
-             FROM Qualificationgroupitems qgi
-             JOIN Qualifications q ON qgi.Qualificationid = q.ID
-             WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
-            groupIds
-          );
-          // Map groupId -> [qualification names]
-          qualMap = groupIds.reduce((acc, gid) => {
-            acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
-            return acc;
-          }, {});
-          // Map groupId -> [qualification IDs]
-          groupQuals = groupIds.reduce((acc, gid) => {
-            acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Qualificationid);
-            return acc;
-          }, {});
-        }
-
-        // Step 5: Filter shifts by employee's qualifications
-        const qualifiedRows = uniqueRows.filter(row => {
-          const groupQ = groupQuals[row.Qualificationgroupid] || [];
-          // Employee is qualified if they have at least one qualification in the group
-          return groupQ.some(qid => empQualIds.includes(qid));
-        });
-
-        // Step 6: Paginate
-        const paginatedRows = qualifiedRows.slice((page - 1) * limit, (page - 1) * limit + limit);
-
-        // Step 7: Send raw UTC values as returned from DB (no formatting)
-        const formatted = paginatedRows.map(row => ({
-          ...row,
-          Shiftdate: row.Shiftdate,
-          Starttime: row.Starttime,
-          Endtime: row.Endtime,
-          qualificationname: qualMap[row.Qualificationgroupid] || []
-        }));
-        
-        // Debug log to see what's being returned
-        console.log('DEBUG: getAvailableClientShifts response structure:', {
-          availableShiftsCount: formatted.length,
-          sampleShift: formatted[0] || 'No shifts found',
-          pagination: { page, limit, total: qualifiedRows.length }
-        });
-        
-        // Return response based on format
-        if (responseFormat === 'simple') {
-          return res.status(200).json(formatted); // Just the array
-        } else {
-          return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total: qualifiedRows.length } });
-        }
-      }
-    } else if (userType) {
-      // If userType is present but not recognized, return 403
-      return res.status(403).json({ message: 'Access denied: Unknown user type', code: 'ACCESS_DENIED' });
-    } else {
-      // If userType is missing, treat as unauthorized
-      return res.status(401).json({ message: 'Unauthorized: No user type', code: 'UNAUTHORIZED' });
+      // Filter out soft-deleted slots in code (defensive)
+      staffShifts = staffRows.filter(s => !s.Deletedat);
     }
-  } catch (err) {
-    // Improved error logging for debugging
-    logger.error('Get available client shifts error', {
-      message: err.message,
-      stack: err.stack,
-      error: err
+    // Group staff shifts by shiftrequestid
+    const staffShiftsByRequest = {};
+    staffShifts.forEach(s => {
+      if (!staffShiftsByRequest[s.Clientshiftrequestid]) staffShiftsByRequest[s.Clientshiftrequestid] = [];
+      // Defensive: filter out soft-deleted slots
+      if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
     });
-    // Return full error details for debugging (remove in production)
-    res.status(500).json({
-      message: 'Error fetching available shifts',
-      error: err.message,
-      stack: err.stack,
-      raw: err
+    // Fetch qualifications for all qualificationgroupids
+    const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
+    let qualMap = {};
+    if (groupIds.length) {
+      const [qualRows] = await db.query(
+        `SELECT qgi.Qualificationgroupid, q.Name
+         FROM Qualificationgroupitems qgi
+         JOIN Qualifications q ON qgi.Qualificationid = q.ID
+         WHERE qgi.Qualificationgroupid IN (${groupIds.map(() => '?').join(',')})`,
+        groupIds
+      );
+      qualMap = groupIds.reduce((acc, gid) => {
+        acc[gid] = qualRows.filter(q => q.Qualificationgroupid === gid).map(q => q.Name);
+        return acc;
+      }, {});
+    }
+    // Show all shifts (no date filter)
+    const filteredRows = rows.filter(row => !row.Deletedat);
+    // Return raw DB values for date/time fields (no conversion)
+    const formatted = filteredRows
+      .map(row => {
+        return {
+          ...row,
+          Shiftdate: row.Shiftdate,
+          Starttime: row.Starttime,
+          Endtime: row.Endtime,
+          qualificationname: qualMap[row.Qualificationgroupid] || [],
+          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
+        };
+      });
+    
+    // Debug log to see what's being returned
+    console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
+      availableShiftsCount: formatted.length,
+      sampleShift: formatted[0] || 'No shifts found',
+      pagination: { page, limit, total }
     });
+    
+    // Return response based on format
+    if (responseFormat === 'simple') {
+      return res.status(200).json(formatted); // Just the array
+    } else {
+      return res.status(200).json({ availableShifts: formatted, pagination: { page, limit, total } });
+    }
   }
 };
 // ================== end getAvailableClientShifts ==================
@@ -1725,24 +1619,13 @@ exports.acceptClientStaffShift = async (req, res) => {
         WHERE uc.clientid = ?
       `, [updatedShift.Clientid]);
 
-      // Ensure date/time are in ISO format for email template
-      // If already ISO, this is a no-op; if not, try to convert
-      function toISO(val) {
-        if (!val) return '';
-        const d = new Date(val);
-        return isNaN(d) ? val : d.toISOString();
-      }
-      const shiftDateISO = toISO(updatedShift.Shiftdate);
-      const startTimeISO = toISO(updatedShift.Starttime);
-      const endTimeISO = toISO(updatedShift.Endtime);
-
       for (const client of clientUsers) {
         const template = mailTemplates.shiftAcceptedClient({
           clientName: client.clientName,
           locationName: updatedShift.LocationName,
-          shiftDate: shiftDateISO,
-          startTime: startTimeISO,
-          endTime: endTimeISO,
+          shiftDate: updatedShift.Shiftdate,
+          startTime: updatedShift.Starttime,
+          endTime: updatedShift.Endtime,
           employeeName: updatedShift.employeeName || 'An employee'
         });
         if (client.email) {
@@ -2040,10 +1923,18 @@ exports.unlinkClientUserFromClient = async (req, res) => {
 // ================== end unlinkClientUserFromClient ==================
 
 // ================== updateClientShiftRequest ==================
-// Edit an existing client shift request (only by creator or staff/admin)
+// Updates a client shift request.
+//
+// TIMEZONE POLICY:
+// - All times (shiftdate, starttime, endtime) received from the frontend are interpreted as Australia/Melbourne time.
+// - All times are converted to UTC before storing in the database.
+// - All times sent to the frontend are converted from UTC to Australia/Melbourne time and formatted as strings.
 exports.updateClientShiftRequest = async (req, res) => {
   const dbConn = db;
-  const shiftId = req.params.id;
+  const shiftId = Number(req.params.id);
+  if (isNaN(shiftId)) {
+    return res.status(400).json({ message: 'Invalid shift ID.' });
+  }
   const userId = req.user?.id;
   const userType = req.user?.usertype;
   const now = new Date();
@@ -2064,52 +1955,58 @@ exports.updateClientShiftRequest = async (req, res) => {
       return res.status(400).json({ message: 'Cannot edit shift: already started or not in editable state.' });
     }
     // Build update fields
-    const allowedFields = ['clientlocationid', 'shiftdate', 'starttime', 'endtime', 'qualificationgroupid', 'totalrequiredstaffnumber', 'additionalvalue'];
     const updates = [];
     const params = [];
-    let newTotalRequired = undefined;
-    let oldTotalRequired = shift.Totalrequiredstaffnumber;
-    for (const field of allowedFields) {
-      if (req.body[field] !== undefined) {
-        updates.push(`${field.charAt(0).toUpperCase() + field.slice(1) } = ?`);
-        params.push(req.body[field]);
-        if (field === 'totalrequiredstaffnumber') newTotalRequired = req.body[field];
-      }
+    const updateBody = { ...req.body };
+
+    if (updateBody.shiftdate !== undefined) {
+      updates.push('Shiftdate = ?');
+      params.push(normalizeDate(updateBody.shiftdate));
     }
+    if (updateBody.starttime !== undefined) {
+      updates.push('Starttime = ?');
+      params.push(normalizeDateTime(updateBody.starttime));
+    }
+    if (updateBody.endtime !== undefined) {
+      updates.push('Endtime = ?');
+      params.push(normalizeDateTime(updateBody.endtime));
+    }
+    if (updateBody.qualificationgroupid !== undefined) {
+      updates.push('Qualificationgroupid = ?');
+      params.push(updateBody.qualificationgroupid);
+    }
+    if (updateBody.totalrequiredstaffnumber !== undefined) {
+      updates.push('Totalrequiredstaffnumber = ?');
+      params.push(Number(updateBody.totalrequiredstaffnumber));
+    }
+    if (updateBody.additionalvalue !== undefined) {
+      updates.push('Additionalvalue = ?');
+      params.push(updateBody.additionalvalue);
+    }
+    // Always update audit fields
+    updates.push('Updatedat = ?');
+    params.push(now);
+    updates.push('Updatedbyid = ?');
+    params.push(userId);
+    // Add the shiftId for the WHERE clause
+    params.push(shiftId);
     if (!updates.length) {
       return res.status(400).json({ message: 'No valid fields to update.' });
     }
-
-    // Always update audit fields
-    updates.push('Updatedat = ?');
-    updates.push('Updatedbyid = ?');
-    params.push(now); // Updatedat (date)
-    params.push(userId); // Updatedbyid (user id)
-    params.push(shiftId);
-    
-    // Validate that all updates contain only allowed field names to prevent SQL injection
-    const validFieldNames = [
-      'Clientlocationid', 'Shiftdate', 'Starttime', 'Endtime', 
-      'Qualificationgroupid', 'Totalrequiredstaffnumber', 'Updatedat', 'Updatedbyid'
-    ];
-    
-    const validUpdates = updates.filter(update => {
-      const fieldName = update.split(' = ')[0];
-      return validFieldNames.includes(fieldName);
-    });
-    
-    if (validUpdates.length === 0) {
-      return res.status(400).json({ message: 'No valid fields to update.' });
-    }
-    
-    await dbConn.query(`UPDATE Clientshiftrequests SET ${validUpdates.join(', ')} WHERE id = ?`, params);
-
+    const updateSql = `UPDATE Clientshiftrequests SET ${updates.join(', ')} WHERE id = ?`;
+    logger.info('UpdateClientShiftRequest - SQL and params', { updateSql, params });
+    const updateResult = await dbConn.query(updateSql, params);
+    logger.info('UpdateClientShiftRequest - updateResult', { affectedRows: updateResult[0]?.affectedRows, updateResult });
+    // Fetch the shift again to confirm update
+    const [updatedRows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [shiftId]);
+    logger.info('UpdateClientShiftRequest - DB value after update', { Totalrequiredstaffnumber: updatedRows[0]?.Totalrequiredstaffnumber, updatedRow: updatedRows[0] });
     // ================== STAFF SHIFT SLOT ADJUSTMENT ==================
-    if (newTotalRequired !== undefined && newTotalRequired !== oldTotalRequired) {
+    if (updateBody.totalrequiredstaffnumber !== undefined && updateBody.totalrequiredstaffnumber !== shift.Totalrequiredstaffnumber) {
+      logger.info('UpdateClientShiftRequest - slot adjustment start', { oldTotalRequired: shift.Totalrequiredstaffnumber, newTotalRequired: updateBody.totalrequiredstaffnumber });
       // Restore soft-deleted slots first
       const [softDeletedSlots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Deletedat IS NOT NULL ORDER BY `Order`', [shiftId]);
       let restored = 0;
-      for (let i = 0; i < softDeletedSlots.length && restored < (newTotalRequired - oldTotalRequired); i++) {
+      for (let i = 0; i < softDeletedSlots.length && restored < (updateBody.totalrequiredstaffnumber - shift.Totalrequiredstaffnumber); i++) {
         const slot = softDeletedSlots[i];
         await dbConn.query('UPDATE Clientstaffshifts SET Deletedat = NULL, Deletedbyid = NULL, Updatedat = ?, Updatedbyid = ? WHERE id = ?', [now, userId, slot.ID]);
         restored++;
@@ -2117,11 +2014,11 @@ exports.updateClientShiftRequest = async (req, res) => {
       // Re-fetch the count of active slots after restoration
       const [activeSlots] = await dbConn.query('SELECT * FROM Clientstaffshifts WHERE Clientshiftrequestid = ? AND Deletedat IS NULL ORDER BY `Order`', [shiftId]);
       const currentActiveCount = activeSlots.length;
-      if (newTotalRequired > currentActiveCount) {
+      if (updateBody.totalrequiredstaffnumber > currentActiveCount) {
         // Find the max `Order` value among all slots (including soft-deleted)
         const [allSlots] = await dbConn.query('SELECT MAX(`Order`) as maxOrder FROM Clientstaffshifts WHERE Clientshiftrequestid = ?', [shiftId]);
         let maxOrder = allSlots[0]?.maxOrder || 0;
-        const slotsToCreate = newTotalRequired - currentActiveCount;
+        const slotsToCreate = updateBody.totalrequiredstaffnumber - currentActiveCount;
         const staffShiftInserts = [];
         for (let i = 1; i <= slotsToCreate; i++) {
           staffShiftInserts.push([
@@ -2132,19 +2029,20 @@ exports.updateClientShiftRequest = async (req, res) => {
             now,
             userId,
             now,
-            userId
+            userId,
+            now // Sysstarttime
           ]);
         }
         if (staffShiftInserts.length) {
-          const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+          const placeholders = staffShiftInserts.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
           const flatValues = staffShiftInserts.flat();
           const staffShiftSql = `INSERT INTO Clientstaffshifts (Clientshiftrequestid, Clientid, ` +
-            '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES ' + placeholders;
+            '`Order`, Status, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime) VALUES ' + placeholders;
           await dbConn.query(staffShiftSql, flatValues);
         }
-      } else if (newTotalRequired < currentActiveCount) {
+      } else if (updateBody.totalrequiredstaffnumber < currentActiveCount) {
         // Remove (soft-delete) unassigned slots, starting from the highest order
-        let toRemove = currentActiveCount - newTotalRequired;
+        let toRemove = currentActiveCount - updateBody.totalrequiredstaffnumber;
         for (let i = activeSlots.length - 1; i >= 0 && toRemove > 0; i--) {
           const slot = activeSlots[i];
           if (!slot.Assignedtouserid && slot.Status === 'open' && !slot.Deletedat) {
@@ -2153,11 +2051,9 @@ exports.updateClientShiftRequest = async (req, res) => {
           }
         }
       }
+      logger.info('UpdateClientShiftRequest - slot adjustment end', { oldTotalRequired: shift.Totalrequiredstaffnumber, newTotalRequired: updateBody.totalrequiredstaffnumber });
     }
     // ================== END STAFF SHIFT SLOT ADJUSTMENT ==================
-
-    // Return updated shift
-    const [updatedRows] = await dbConn.query('SELECT * FROM Clientshiftrequests WHERE id = ?', [shiftId]);
     // Fetch qualifications for the group and return as qualificationname (array of names)
     let qualificationname = [];
     if (updatedRows[0]?.Qualificationgroupid) {
@@ -2167,9 +2063,7 @@ exports.updateClientShiftRequest = async (req, res) => {
       );
       qualificationname = qualRows.map(q => q.Name);
     }
-
     // ========== Notify assigned/approved employees about shift update =========
-    // Find all staff shift slots for this request with status 'approved' and assigned employee
     const [approvedSlots] = await dbConn.query(
       `SELECT css.id, css.Assignedtouserid, u.email, u.fullname, cl.LocationName, cl.LocationAddress, c.Name as clientname
        FROM Clientstaffshifts css
@@ -2198,7 +2092,6 @@ exports.updateClientShiftRequest = async (req, res) => {
       }
     }
     // ========== End notification ==========
-
     res.status(200).json({ message: 'Shift request updated successfully.', shift: { ...updatedRows[0], qualificationname } });
   } catch (err) {
     logger.error('Update shift request error', { error: err });
@@ -2245,6 +2138,9 @@ exports.deleteClientShiftRequest = async (req, res) => {
 
 // ================== getMyShifts ==================
 // Returns all shifts assigned to the logged-in user (employee)
+//
+// TIMEZONE POLICY:
+// - All times sent to the frontend are converted from UTC to Australia/Melbourne time and formatted as strings.
 exports.getMyShifts = async (req, res) => {
   const userId = req.user?.id;
   const userType = req.user?.usertype;
@@ -2275,13 +2171,19 @@ exports.getMyShifts = async (req, res) => {
       [userId]
     );
 
-    // Format dates for frontend
-    const formatted = shifts.map(s => ({
-      ...s,
-      Shiftdate: s.Shiftdate ? formatDate(s.Shiftdate) : null,
-      Starttime: s.Starttime ? formatDateTime(s.Starttime) : null,
-      Endtime: s.Endtime ? formatDateTime(s.Endtime) : null
-    }));
+    // Convert UTC times to Melbourne time for frontend
+    const formatted = shifts.map(s => {
+      // Handle MySQL datetime values that may be Date objects or strings
+      let safeStart = null;
+      let safeEnd = null;
+      
+      return {
+        ...s,
+        Shiftdate: s.Shiftdate,
+        Starttime: s.Starttime,
+        Endtime: s.Endtime
+      };
+    });
     return res.status(200).json({ myShifts: formatted });
   } catch (err) {
     logger.error('Get my shifts error', { error: err });
@@ -2610,3 +2512,22 @@ exports.getStaffQualificationRegistrationDetails = async (req, res) => {
   }
 };
 // ================== end getStaffQualificationRegistrationDetails ==================
+
+// Helper to get value from either capitalized or lowercase key
+function getField(obj, key) {
+  return obj[key] !== undefined ? obj[key] : obj[key.toLowerCase()];
+}
+
+// Add normalization helpers at the top of the file (after imports):
+function normalizeDate(val) {
+  if (!val) return val;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) return val;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val + ' 00:00:00';
+  return val;
+}
+function normalizeDateTime(val) {
+  if (!val) return val;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) return val;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) return val + ':00';
+  return val;
+}

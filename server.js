@@ -18,6 +18,7 @@ const apiDocs = require('./docs/apiDocs');
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
 const clientRoutes = require('./routes/clientRoutes');
+const publicRoutes = require('./routes/publicRoutes');
 
 const app = express();
 app.use(cookieParser());
@@ -175,10 +176,11 @@ app.get('/api', (req, res) => {
   });
 });
 
-// Mount crudRoutes first so /api/contact-admin is public
-app.use('/api', crudRoutes);
+// Mount publicRoutes first so /api/contact-admin is always public
+app.use('/api', publicRoutes);
 app.use('/api', authRoutes);
-app.use('/api', clientRoutes); // Register clientRoutes after authRoutes
+app.use('/api', clientRoutes);
+app.use('/api', crudRoutes);
 
 // Handle 404 for unknown API routes
 app.use('/api/', (req, res) => {
