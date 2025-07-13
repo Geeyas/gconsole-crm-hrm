@@ -185,6 +185,9 @@ router.delete('/People/:id', authenticate, authController.softDeletePerson);
 // Route to get shifts for the logged-in employee
 router.get('/my-shifts', authenticate, authController.getMyShifts);
 
+// Route to get qualifications for the logged-in employee
+router.get('/my-qualifications', authenticate, authController.getMyQualifications);
+
 console.log('authController:', authController);
 console.log('authController keys:', Object.keys(authController));
 console.log('authController.getAllClientLocations:', typeof authController.getAllClientLocations);

@@ -22,7 +22,6 @@ async function loadTableNames() {
   try {
     const [tables] = await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = ?`, [process.env.DB_NAME]);
     validTables = new Set(tables.map(row => row.TABLE_NAME));
-    // console.log('✅ Loaded table names:', [...validTables]);
   } catch (err) {
     console.error('❌ Failed to load table names:', err);
   }
@@ -48,10 +47,30 @@ exports.getAllPaginated = async (req, res, next) => {
   try {
     let results, total;
     if (table.toLowerCase() === 'people') {
-      // Get total count from People (only non-deleted)
-      const [countResult] = await db.query(`SELECT COUNT(*) as total FROM People WHERE deletedat IS NULL`);
-      total = countResult[0]?.total || 0;
-      // Get paginated People with joined Users and Usertype, only non-deleted
+      const userType = req.user?.usertype;
+      
+      // Build WHERE clause based on user role
+      let whereClause = 'p.deletedat IS NULL';
+      let countWhereClause = 'p.deletedat IS NULL';
+      
+      // If Staff - Standard User, exclude System Admin users
+      if (userType === 'Staff - Standard User') {
+        whereClause += ' AND (ut.Name IS NULL OR ut.Name != "System Admin")';
+        countWhereClause += ' AND (ut.Name IS NULL OR ut.Name != "System Admin")';
+      }
+      // System Admin can see all users (no additional filter)
+      
+      // Get total count from People (only non-deleted, with role-based filtering)
+      const [countResult] = await db.query(`
+        SELECT COUNT(*) as total 
+        FROM People p
+        LEFT JOIN Users u ON p.Linkeduserid = u.id
+        LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+        LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+        WHERE ${countWhereClause}
+      `);
+      
+      // Get paginated People with joined Users and Usertype, only non-deleted, with role-based filtering
       [results] = await db.query(`
         SELECT 
           p.*, 
@@ -61,7 +80,7 @@ exports.getAllPaginated = async (req, res, next) => {
         LEFT JOIN Users u ON p.Linkeduserid = u.id
         LEFT JOIN Assignedusertypes au ON au.Userid = u.id
         LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
-        WHERE p.deletedat IS NULL
+        WHERE ${whereClause}
         LIMIT ? OFFSET ?
       `, [limit, offset]);
     } else {

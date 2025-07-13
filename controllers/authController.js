@@ -1472,25 +1472,94 @@ exports.getAvailableClientShifts = async (req, res) => {
     const todayStr = today.toFormat('yyyy-MM-dd');
     dateFilterSql = 'csr.Shiftdate >= ?';
     dateFilterParams = [todayStr];
+    
     // Get total count
     const [countResult] = await db.query(
       `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
       dateFilterParams
     );
     total = countResult[0]?.total || 0;
-    // Admin/Staff: See all shifts for all hospitals/locations
-    [rows] = await db.query(
-      `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
-             u.fullname AS creatorName
-      FROM Clientshiftrequests csr
-      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-      LEFT JOIN Clients c ON cl.clientid = c.id
-      LEFT JOIN Users u ON csr.Createdbyid = u.id
-      WHERE csr.deletedat IS NULL AND ${dateFilterSql}
-      ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
-      LIMIT ? OFFSET ?
-    `, [...dateFilterParams, limit, offset]);
+    
+    // Different logic based on user type
+    if (userType === 'Employee - Standard User') {
+      // Employee: Only show shifts they are qualified for
+      const userId = req.user?.id;
+      
+      // Get employee's qualifications
+      const [employeeQuals] = await db.query(
+        `SELECT sq.QualificationID 
+         FROM Staffqualifications sq 
+         WHERE sq.Userid = ? AND sq.Deletedat IS NULL`,
+        [userId]
+      );
+      
+      if (!employeeQuals.length) {
+        // Employee has no qualifications, return empty result
+        return res.status(200).json({ 
+          availableShifts: [], 
+          pagination: { page, limit, total: 0 } 
+        });
+      }
+      
+      const employeeQualIds = employeeQuals.map(q => q.QualificationID);
+      
+      // Get qualification groups that contain employee's qualifications
+      const [qualGroupRows] = await db.query(
+        `SELECT DISTINCT qgi.Qualificationgroupid 
+         FROM Qualificationgroupitems qgi 
+         WHERE qgi.Qualificationid IN (${employeeQualIds.map(() => '?').join(',')})`,
+        employeeQualIds
+      );
+      
+      if (!qualGroupRows.length) {
+        // Employee's qualifications don't match any qualification groups, return empty
+        return res.status(200).json({ 
+          availableShifts: [], 
+          pagination: { page, limit, total: 0 } 
+        });
+      }
+      
+      const qualGroupIds = qualGroupRows.map(q => q.Qualificationgroupid);
+      
+      // Get shifts that match employee's qualifications
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
+        WHERE csr.deletedat IS NULL AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+        LIMIT ? OFFSET ?
+      `, [...dateFilterParams, ...qualGroupIds, limit, offset]);
+      
+      // Get total count for qualified shifts
+      const [qualifiedCountResult] = await db.query(
+        `SELECT COUNT(DISTINCT csr.id) as total 
+         FROM Clientshiftrequests csr 
+         WHERE csr.deletedat IS NULL AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})`,
+        [...dateFilterParams, ...qualGroupIds]
+      );
+      total = qualifiedCountResult[0]?.total || 0;
+      
+    } else {
+      // Admin/Staff: See all shifts for all hospitals/locations
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
+        WHERE csr.deletedat IS NULL AND ${dateFilterSql}
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+        LIMIT ? OFFSET ?
+      `, [...dateFilterParams, limit, offset]);
+    }
+    
     // For each shift request, get its staff shifts and their statuses
     const shiftIds = rows.map(row => row.shiftrequestid);
     let staffShifts = [];
@@ -1504,7 +1573,13 @@ exports.getAvailableClientShifts = async (req, res) => {
       );
       // Filter out soft-deleted slots in code (defensive)
       staffShifts = staffRows.filter(s => !s.Deletedat);
+      
+      // For employees, only show 'open' status shifts
+      if (userType === 'Employee - Standard User') {
+        staffShifts = staffShifts.filter(s => s.Status === 'open');
+      }
     }
+    
     // Group staff shifts by shiftrequestid
     const staffShiftsByRequest = {};
     staffShifts.forEach(s => {
@@ -1512,6 +1587,7 @@ exports.getAvailableClientShifts = async (req, res) => {
       // Defensive: filter out soft-deleted slots
       if (!s.Deletedat) staffShiftsByRequest[s.Clientshiftrequestid].push(s);
     });
+    
     // Fetch qualifications for all qualificationgroupids
     const groupIds = [...new Set(rows.map(r => r.Qualificationgroupid).filter(Boolean))];
     let qualMap = {};
@@ -1528,6 +1604,7 @@ exports.getAvailableClientShifts = async (req, res) => {
         return acc;
       }, {});
     }
+    
     // Show all shifts (no date filter)
     const filteredRows = rows.filter(row => !row.Deletedat);
     // Return raw DB values for date/time fields (no conversion)
@@ -1542,13 +1619,6 @@ exports.getAvailableClientShifts = async (req, res) => {
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         };
       });
-    
-    // Debug log to see what's being returned
-    console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
-      availableShiftsCount: formatted.length,
-      sampleShift: formatted[0] || 'No shifts found',
-      pagination: { page, limit, total }
-    });
     
     // Return response based on format
     if (responseFormat === 'simple') {
@@ -2531,3 +2601,46 @@ function normalizeDateTime(val) {
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(val)) return val + ':00';
   return val;
 }
+
+// ================== getMyQualifications ==================
+// Returns all qualifications assigned to the logged-in employee (from JWT token)
+exports.getMyQualifications = async (req, res) => {
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized: No user ID in token.' });
+  }
+
+  // Only Employee - Standard User can use this endpoint
+  if (userType !== 'Employee - Standard User') {
+    return res.status(403).json({ message: 'Access denied: Only employees can use this endpoint.' });
+  }
+
+  try {
+    // Find the People record linked to this user
+    const [peopleRows] = await db.query('SELECT * FROM People WHERE Linkeduserid = ? AND Deletedat IS NULL', [userId]);
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'No People record found for this user.' });
+    }
+
+    // Get all qualifications for this user, excluding soft deleted
+    const [qualRows] = await db.query(
+      `SELECT q.ID, q.Name, sq.Createdat, sq.Updatedat, sq.Registrationnumber, sq.Dateofregistration, sq.Dateofexpiry
+       FROM Staffqualifications sq
+       JOIN Qualifications q ON sq.QualificationID = q.ID
+       WHERE sq.Userid = ? AND sq.Deletedat IS NULL
+       ORDER BY q.Name ASC`,
+      [userId]
+    );
+
+    return res.status(200).json({ 
+      message: 'Qualifications retrieved successfully',
+      qualifications: qualRows 
+    });
+  } catch (err) {
+    logger.error('Get my qualifications error', { error: err });
+    return res.status(500).json({ message: 'Failed to fetch qualifications.', error: err.message });
+  }
+};
+// ================== end getMyQualifications ==================

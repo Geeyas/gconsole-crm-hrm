@@ -91,8 +91,6 @@ exports.createClient = async (req, res) => {
     const [result] = await pool.query(sql, values);
     res.status(201).json({ message: 'Client created', id: result.insertId });
   } catch (err) {
-    // Optionally log SQL and values for debugging
-    // console.error('SQL:', sql, 'VALUES:', values);
     res.status(500).json({ message: 'Failed to create client', error: err.message });
   }
 };
