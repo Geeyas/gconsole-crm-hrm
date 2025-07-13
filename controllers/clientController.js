@@ -175,11 +175,133 @@ exports.createClientLocation = async (req, res) => {
     return res.status(400).json({ message: 'Clientid, LocationName, and LocationAddress are required' });
   }
   try {
-    const [result] = await pool.query(
-      'INSERT INTO Clientlocations (Clientid, LocationName, LocationAddress, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, ?, ?, NOW(), ?, NOW(), ?)',
-      [Clientid, LocationName, LocationAddress, req.user.id, req.user.id]
-    );
-    res.status(201).json({ message: 'Client location created', id: result.insertId });
+    // Check if client exists
+    const [clientCheck] = await pool.query('SELECT ID FROM Clients WHERE ID = ?', [Clientid]);
+    if (clientCheck.length === 0) {
+      return res.status(400).json({ message: 'Invalid Clientid. Client does not exist.' });
+    }
+
+    // Helper function to handle undefined vs empty string
+    const getValue = (value) => {
+      return value === undefined ? null : value;
+    };
+
+    // Extract all possible fields from request body
+    const {
+      Locationtypeid,
+      Locationfunctionid,
+      Priorityid,
+      Country,
+      State,
+      Suburb,
+      Postcode,
+      Contactphonenumber,
+      Email,
+      WebsiteURL,
+      Fax,
+      Invoiceemail,
+      Isgst,
+      Ispayrolltaxexempt,
+      Currency,
+      Iscontactaddresssame,
+      Contactlocationaddress,
+      Contactcountry,
+      Contactsuburb,
+      Contactpostcode,
+      Additionalvalue
+    } = fields;
+
+    // Prepare the insert query with all fields
+    const insertFields = [
+      'Clientid',
+      'Locationtypeid',
+      'Locationfunctionid', 
+      'Priorityid',
+      'LocationName',
+      'LocationAddress',
+      'Country',
+      'State',
+      'Suburb',
+      'Postcode',
+      'Contactphonenumber',
+      'Email',
+      'WebsiteURL',
+      'Fax',
+      'Invoiceemail',
+      'Isgst',
+      'Ispayrolltaxexempt',
+      'Currency',
+      'Iscontactaddresssame',
+      'Contactlocationaddress',
+      'Contactcountry',
+      'Contactsuburb',
+      'Contactpostcode',
+      'Additionalvalue',
+      'Createdat',
+      'Createdbyid',
+      'Updatedat',
+      'Updatedbyid',
+      'Sysstarttime'
+    ];
+
+    const now = new Date();
+    const insertValues = [
+      Clientid,
+      getValue(Locationtypeid),
+      getValue(Locationfunctionid),
+      getValue(Priorityid),
+      LocationName,
+      LocationAddress,
+      getValue(Country),
+      getValue(State),
+      getValue(Suburb),
+      getValue(Postcode),
+      getValue(Contactphonenumber),
+      getValue(Email),
+      getValue(WebsiteURL),
+      getValue(Fax),
+      getValue(Invoiceemail),
+      getValue(Isgst),
+      getValue(Ispayrolltaxexempt),
+      getValue(Currency),
+      getValue(Iscontactaddresssame),
+      getValue(Contactlocationaddress),
+      getValue(Contactcountry),
+      getValue(Contactsuburb),
+      getValue(Contactpostcode),
+      getValue(Additionalvalue),
+      now, // Createdat
+      req.user.id, // Createdbyid
+      now, // Updatedat
+      req.user.id, // Updatedbyid
+      now  // Sysstarttime
+    ];
+
+    // Log the values for debugging
+    console.log('Creating client location with values:', {
+      Clientid,
+      LocationName,
+      LocationAddress,
+      Country,
+      State,
+      Suburb,
+      Postcode,
+      Email
+    });
+
+    const placeholders = insertValues.map(() => '?').join(', ');
+    const query = `INSERT INTO Clientlocations (${insertFields.join(', ')}) VALUES (${placeholders})`;
+    
+    const [result] = await pool.query(query, insertValues);
+    
+    // Fetch the created record to return complete data
+    const [createdRecord] = await pool.query('SELECT * FROM Clientlocations WHERE ID = ?', [result.insertId]);
+    
+    res.status(201).json({ 
+      message: 'Client location created successfully', 
+      id: result.insertId,
+      record: createdRecord[0]
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to create client location', error: err.message });
   }
@@ -192,30 +314,114 @@ exports.updateClientLocation = async (req, res) => {
   }
   const locationId = req.params.id;
   const fields = req.body;
-  // List of valid columns in Clientlocations table (add more as needed)
-  const validColumns = [
-    'Clientid', 'Locationtypeid', 'Locationfunctionid', 'LocationName', 'LocationAddress', 'Country', 'State', 'Suburb', 'Postcode', 'Email', 'Fax', 'WebsiteURL', 'Contactcountry', 'Contactlocationaddress', 'Contactphonenumber', 'Contactpostcode', 'Contactsuburb', 'Iscontactaddresssame'
-  ];
-  // Filter only valid columns and skip system fields
-  const updates = [];
-  const params = [];
-  for (const [key, value] of Object.entries(fields)) {
-    if (validColumns.includes(key)) {
-      updates.push(`${key} = ?`);
-      params.push(value);
-    }
-  }
-  if (updates.length === 0) {
-    return res.status(400).json({ message: 'No valid fields provided for update' });
-  }
-  updates.push('Updatedat = NOW()');
-  updates.push('Updatedbyid = ?');
-  params.push(req.user.id);
-  params.push(locationId);
+  
   try {
-    const sql = `UPDATE Clientlocations SET ${updates.join(', ')} WHERE ID = ? AND Deletedat IS NULL`;
-    await pool.query(sql, params);
-    res.status(200).json({ message: 'Client location updated' });
+    // Check if the record exists and is not deleted
+    const [existingRecord] = await pool.query('SELECT * FROM Clientlocations WHERE ID = ? AND Deletedat IS NULL', [locationId]);
+    if (existingRecord.length === 0) {
+      return res.status(404).json({ message: 'Client location not found or has been deleted.' });
+    }
+
+    // Helper function to handle undefined vs empty string
+    const getValue = (value) => {
+      return value === undefined ? null : value;
+    };
+
+    // Extract all possible fields from request body
+    const {
+      Clientid,
+      Locationtypeid,
+      Locationfunctionid,
+      Priorityid,
+      LocationName,
+      LocationAddress,
+      Country,
+      State,
+      Suburb,
+      Postcode,
+      Contactphonenumber,
+      Email,
+      WebsiteURL,
+      Fax,
+      Invoiceemail,
+      Isgst,
+      Ispayrolltaxexempt,
+      Currency,
+      Iscontactaddresssame,
+      Contactlocationaddress,
+      Contactcountry,
+      Contactsuburb,
+      Contactpostcode,
+      Additionalvalue
+    } = fields;
+
+    // If Clientid is being updated, validate it exists
+    if (Clientid && Clientid !== existingRecord[0].Clientid) {
+      const [clientCheck] = await pool.query('SELECT ID FROM Clients WHERE ID = ?', [Clientid]);
+      if (clientCheck.length === 0) {
+        return res.status(400).json({ message: 'Invalid Clientid. Client does not exist.' });
+      }
+    }
+
+    // Build dynamic update query
+    const updateFields = [];
+    const updateValues = [];
+
+    // Add all fields that are provided in the request (including empty strings)
+    if (Clientid !== undefined) { updateFields.push('Clientid = ?'); updateValues.push(Clientid); }
+    if (Locationtypeid !== undefined) { updateFields.push('Locationtypeid = ?'); updateValues.push(getValue(Locationtypeid)); }
+    if (Locationfunctionid !== undefined) { updateFields.push('Locationfunctionid = ?'); updateValues.push(getValue(Locationfunctionid)); }
+    if (Priorityid !== undefined) { updateFields.push('Priorityid = ?'); updateValues.push(getValue(Priorityid)); }
+    if (LocationName !== undefined) { updateFields.push('LocationName = ?'); updateValues.push(getValue(LocationName)); }
+    if (LocationAddress !== undefined) { updateFields.push('LocationAddress = ?'); updateValues.push(getValue(LocationAddress)); }
+    if (Country !== undefined) { updateFields.push('Country = ?'); updateValues.push(getValue(Country)); }
+    if (State !== undefined) { updateFields.push('State = ?'); updateValues.push(getValue(State)); }
+    if (Suburb !== undefined) { updateFields.push('Suburb = ?'); updateValues.push(getValue(Suburb)); }
+    if (Postcode !== undefined) { updateFields.push('Postcode = ?'); updateValues.push(getValue(Postcode)); }
+    if (Contactphonenumber !== undefined) { updateFields.push('Contactphonenumber = ?'); updateValues.push(getValue(Contactphonenumber)); }
+    if (Email !== undefined) { updateFields.push('Email = ?'); updateValues.push(getValue(Email)); }
+    if (WebsiteURL !== undefined) { updateFields.push('WebsiteURL = ?'); updateValues.push(getValue(WebsiteURL)); }
+    if (Fax !== undefined) { updateFields.push('Fax = ?'); updateValues.push(getValue(Fax)); }
+    if (Invoiceemail !== undefined) { updateFields.push('Invoiceemail = ?'); updateValues.push(getValue(Invoiceemail)); }
+    if (Isgst !== undefined) { updateFields.push('Isgst = ?'); updateValues.push(getValue(Isgst)); }
+    if (Ispayrolltaxexempt !== undefined) { updateFields.push('Ispayrolltaxexempt = ?'); updateValues.push(getValue(Ispayrolltaxexempt)); }
+    if (Currency !== undefined) { updateFields.push('Currency = ?'); updateValues.push(getValue(Currency)); }
+    if (Iscontactaddresssame !== undefined) { updateFields.push('Iscontactaddresssame = ?'); updateValues.push(getValue(Iscontactaddresssame)); }
+    if (Contactlocationaddress !== undefined) { updateFields.push('Contactlocationaddress = ?'); updateValues.push(getValue(Contactlocationaddress)); }
+    if (Contactcountry !== undefined) { updateFields.push('Contactcountry = ?'); updateValues.push(getValue(Contactcountry)); }
+    if (Contactsuburb !== undefined) { updateFields.push('Contactsuburb = ?'); updateValues.push(getValue(Contactsuburb)); }
+    if (Contactpostcode !== undefined) { updateFields.push('Contactpostcode = ?'); updateValues.push(getValue(Contactpostcode)); }
+    if (Additionalvalue !== undefined) { updateFields.push('Additionalvalue = ?'); updateValues.push(getValue(Additionalvalue)); }
+
+    // Always update audit fields
+    updateFields.push('Updatedat = ?');
+    updateValues.push(new Date());
+    updateFields.push('Updatedbyid = ?');
+    updateValues.push(req.user.id);
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update.' });
+    }
+
+    // Log the update for debugging
+    console.log('Updating client location with fields:', updateFields);
+    console.log('Update values:', updateValues);
+
+    const setClause = updateFields.join(', ');
+    const query = `UPDATE Clientlocations SET ${setClause} WHERE ID = ?`;
+    const [results] = await pool.query(query, [...updateValues, locationId]);
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ message: 'Client location not found.' });
+    }
+
+    // Fetch the updated record to return complete data
+    const [updatedRecord] = await pool.query('SELECT * FROM Clientlocations WHERE ID = ?', [locationId]);
+    
+    res.status(200).json({ 
+      message: 'Client location updated successfully',
+      record: updatedRecord[0]
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update client location', error: err.message });
   }

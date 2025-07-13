@@ -15,6 +15,390 @@ const apiDocs = [
     NOTE: 'https://www.npmjs.com/package/jwt-decode  -  Use <npm i jwt-decode> use this link to decode the JWT token and get the information of the user.'
   },
   {
+    method: 'GET',
+    path: '/api/my-qualifications',
+    description: 'Get all qualifications assigned to the logged-in employee (Employee - Standard User only)',
+    userType: ['Employee - Standard User'],
+    headers: ['Authorization: Bearer <JWT token> (Employee - Standard User)'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Employee Self-Service):**
+──────────────────────────────────────────────────────────────
+- Only Employee - Standard User can use this endpoint
+- No parameters needed - automatically uses JWT token to identify employee
+- Returns all qualifications assigned to the logged-in employee
+- Includes registration details (registration number, dates) if available
+- Only shows active (non-deleted) qualifications
+- Results are sorted alphabetically by qualification name
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in as Employee - Standard User and get the JWT token
+2. Make a GET request to /api/my-qualifications
+3. Include the JWT token in the Authorization header
+4. The response will show all qualifications assigned to the employee
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/my-qualifications \\
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'Qualifications retrieved successfully',
+        body: {
+          message: 'Qualifications retrieved successfully',
+          qualifications: [
+            {
+              ID: 1,
+              Name: 'Registered Nurse',
+              Createdat: '2024-01-15T10:30:00.000Z',
+              Updatedat: '2024-01-15T10:30:00.000Z',
+              Registrationnumber: 'RN123456',
+              Dateofregistration: '2024-01-01',
+              Dateofexpiry: '2025-01-01'
+            },
+            {
+              ID: 2,
+              Name: 'CPR Certification',
+              Createdat: '2024-01-20T14:45:00.000Z',
+              Updatedat: '2024-01-20T14:45:00.000Z',
+              Registrationnumber: 'CPR789',
+              Dateofregistration: '2024-01-15',
+              Dateofexpiry: '2024-07-15'
+            }
+          ]
+        }
+      },
+      401: 'Unauthorized: No user ID in token',
+      403: 'Access denied: Only employees can use this endpoint',
+      404: 'No People record found for this user',
+      500: 'Failed to fetch qualifications'
+    },
+    NOTE: 'This endpoint provides a simple, secure way for employees to view their own qualifications. No need to know their own ID - the JWT token automatically identifies the employee. Only Employee - Standard User accounts can access this endpoint. Returns qualifications with registration details if available.'
+  },
+  {
+    method: 'GET',
+    path: '/api/people/:id/qualifications',
+    description: 'Get all qualifications assigned to a person (People.ID)',
+    userType: ['Staff - Standard User', 'System Admin', 'Self'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    urlParams: ['id (People table ID or Linkeduserid)'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Admin/Staff/Self model):**
+──────────────────────────────────────────────────────────────
+- Staff - Standard User and System Admin can view any employee's qualifications
+- Employees can only view their own qualifications (self-service)
+- The :id parameter can be either People.ID or Linkeduserid
+- Returns all active qualifications for the specified person
+- Includes creation and update timestamps for audit purposes
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in and get the JWT token
+2. Make a GET request to /api/people/{id}/qualifications
+3. Include the JWT token in the Authorization header
+4. The response will show all qualifications for the specified person
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/people/123/qualifications \\
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'Qualifications retrieved successfully',
+        body: {
+          qualifications: [
+            {
+              ID: 1,
+              Name: 'Registered Nurse',
+              Createdat: '2024-01-15T10:30:00.000Z',
+              Updatedat: '2024-01-15T10:30:00.000Z'
+            },
+            {
+              ID: 2,
+              Name: 'CPR Certification',
+              Createdat: '2024-01-20T14:45:00.000Z',
+              Updatedat: '2024-01-20T14:45:00.000Z'
+            }
+          ]
+        }
+      },
+      400: 'Missing person/user id',
+      403: 'Access denied: Only staff/admin or the user themselves can view qualifications',
+      404: 'No People record found for this id (as ID or Linkeduserid)',
+      500: 'Failed to fetch qualifications'
+    },
+    NOTE: 'This endpoint allows staff/admin to view any employee qualifications or employees to view their own. The :id parameter accepts both People.ID and Linkeduserid for flexibility. Authorization is enforced - employees can only view their own qualifications while staff/admin can view any employee qualifications.'
+  },
+  {
+    method: 'POST',
+    path: '/api/people/:id/qualifications',
+    description: 'Add a qualification to an employee (Staff/Admin or Self)',
+    userType: ['Staff - Standard User', 'System Admin', 'Self'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    urlParams: ['id (People table ID or Linkeduserid)'],
+    bodyParams: ['qualificationId'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Assignment model):**
+──────────────────────────────────────────────────────────────
+- Staff - Standard User and System Admin can add qualifications to any employee
+- Employees can add qualifications to themselves (self-service)
+- The :id parameter can be either People.ID or Linkeduserid
+- Creates a new record in Staffqualifications table
+- Handles duplicate assignments gracefully
+- Includes audit trail with creation timestamps
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in and get the JWT token
+2. Make a POST request to /api/people/{id}/qualifications
+3. Include the JWT token in the Authorization header
+4. Send qualificationId in the request body
+5. The response will confirm the qualification was added
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X POST https://your-api-domain/api/people/123/qualifications \\
+  -H "Authorization: Bearer <JWT token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"qualificationId": 1}'
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>',
+        'Content-Type': 'application/json'
+      },
+      body: {
+        qualificationId: 1
+      }
+    },
+    exampleResponse: {
+      201: {
+        description: 'Qualification added successfully',
+        body: {
+          message: 'Qualification added to employee.'
+        }
+      },
+      400: 'Missing person/user id or qualificationId',
+      403: 'Access denied: Only staff/admin or the user themselves can add qualifications',
+      404: 'No People record found for this id (as ID or Linkeduserid)',
+      409: 'Qualification already assigned to this user',
+      500: 'Failed to add qualification'
+    },
+    NOTE: 'This endpoint allows assignment of qualifications to employees. Staff/admin can assign to any employee, while employees can assign to themselves. The qualificationId must exist in the Qualifications table. Duplicate assignments are prevented with a 409 error.'
+  },
+  {
+    method: 'DELETE',
+    path: '/api/people/:id/qualifications/:qualificationId',
+    description: 'Remove a qualification from an employee (Staff/Admin or Self)',
+    userType: ['Staff - Standard User', 'System Admin', 'Self'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    urlParams: ['id (People table ID or Linkeduserid)', 'qualificationId'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Soft Delete model):**
+──────────────────────────────────────────────────────────────
+- Staff - Standard User and System Admin can remove qualifications from any employee
+- Employees can remove qualifications from themselves (self-service)
+- The :id parameter can be either People.ID or Linkeduserid
+- Performs soft delete (sets Deletedat and Deletedbyid)
+- Maintains data integrity and audit trail
+- Can be restored by re-adding the same qualification
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in and get the JWT token
+2. Make a DELETE request to /api/people/{id}/qualifications/{qualificationId}
+3. Include the JWT token in the Authorization header
+4. The response will confirm the qualification was removed
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X DELETE https://your-api-domain/api/people/123/qualifications/1 \\
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'Qualification removed successfully',
+        body: {
+          message: 'Qualification removed (soft deleted) from employee.'
+        }
+      },
+      400: 'Missing person/user id or qualificationId',
+      403: 'Access denied: Only staff/admin or the user themselves can remove qualifications',
+      404: 'No People record found for this id (as ID or Linkeduserid)',
+      500: 'Failed to remove qualification'
+    },
+    NOTE: 'This endpoint performs soft delete of qualifications, maintaining data integrity. Staff/admin can remove from any employee, while employees can remove from themselves. The qualification is not permanently deleted and can be restored by re-adding it.'
+  },
+  {
+    method: 'PUT',
+    path: '/api/people/:id/qualifications/:qualificationId/registration-details',
+    description: 'Set registration details for a staff qualification (Staff/Admin or Self)',
+    userType: ['Staff - Standard User', 'System Admin', 'Self'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    urlParams: ['id (People table ID or Linkeduserid)', 'qualificationId'],
+    bodyParams: ['registrationnumber', 'dateofregistration', 'dateofexpiry'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Registration Details model):**
+──────────────────────────────────────────────────────────────
+- Staff - Standard User and System Admin can set registration details for any employee
+- Employees can set registration details for their own qualifications (self-service)
+- The :id parameter can be either People.ID or Linkeduserid
+- All fields (registrationnumber, dateofregistration, dateofexpiry) are required
+- Updates the Staffqualifications table with professional registration information
+- Includes audit trail with update timestamps
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in and get the JWT token
+2. Make a PUT request to /api/people/{id}/qualifications/{qualificationId}/registration-details
+3. Include the JWT token in the Authorization header
+4. Send all required fields in the request body
+5. The response will confirm the registration details were set
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X PUT https://your-api-domain/api/people/123/qualifications/1/registration-details \\
+  -H "Authorization: Bearer <JWT token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"registrationnumber": "RN123456", "dateofregistration": "2024-01-01", "dateofexpiry": "2025-01-01"}'
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>',
+        'Content-Type': 'application/json'
+      },
+      body: {
+        registrationnumber: 'RN123456',
+        dateofregistration: '2024-01-01',
+        dateofexpiry: '2025-01-01'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'Registration details set successfully',
+        body: {
+          message: 'Staff qualification registration details set.',
+          staffqualification: {
+            Userid: 123,
+            QualificationID: 1,
+            Registrationnumber: 'RN123456',
+            Dateofregistration: '2024-01-01',
+            Dateofexpiry: '2025-01-01',
+            Updatedat: '2024-01-15T10:30:00.000Z',
+            Updatedbyid: 456
+          }
+        }
+      },
+      400: 'Missing personId or qualificationId',
+      403: 'Access denied: Only staff/admin or the user themselves can set registration details',
+      404: 'Staff qualification not found for this user',
+      500: 'Failed to set staff qualification registration details'
+    },
+    NOTE: 'This endpoint allows setting professional registration details for qualifications. All fields are mandatory. Staff/admin can set for any employee, while employees can set for themselves. Useful for tracking professional certifications and their expiry dates.'
+  },
+  {
+    method: 'GET',
+    path: '/api/people/:id/qualifications/:qualificationId/registration-details',
+    description: 'Get registration details for a staff qualification (Staff/Admin or Self)',
+    userType: ['Staff - Standard User', 'System Admin', 'Self'],
+    headers: ['Authorization: Bearer <JWT token>'],
+    urlParams: ['id (People table ID or Linkeduserid)', 'qualificationId'],
+    NOTE: `
+──────────────────────────────────────────────────────────────
+**How this API works (Registration Details Retrieval):**
+──────────────────────────────────────────────────────────────
+- Staff - Standard User and System Admin can view registration details for any employee
+- Employees can view registration details for their own qualifications (self-service)
+- The :id parameter can be either People.ID or Linkeduserid
+- Returns registration number, registration date, and expiry date
+- Only returns details for active (non-deleted) qualifications
+
+──────────────────────────────────────────────────────────────
+**How to use this API:**
+──────────────────────────────────────────────────────────────
+1. Log in and get the JWT token
+2. Make a GET request to /api/people/{id}/qualifications/{qualificationId}/registration-details
+3. Include the JWT token in the Authorization header
+4. The response will show the registration details for the qualification
+
+──────────────────────────────────────────────────────────────
+**Example cURL:**
+──────────────────────────────────────────────────────────────
+curl -X GET https://your-api-domain/api/people/123/qualifications/1/registration-details \\
+  -H "Authorization: Bearer <JWT token>"
+──────────────────────────────────────────────────────────────
+`,
+    exampleRequest: {
+      headers: {
+        'Authorization': 'Bearer <JWT token>'
+      }
+    },
+    exampleResponse: {
+      200: {
+        description: 'Registration details retrieved successfully',
+        body: {
+          registrationnumber: 'RN123456',
+          dateofregistration: '2024-01-01',
+          dateofexpiry: '2025-01-01'
+        }
+      },
+      400: 'Missing personId or qualificationId',
+      403: 'Access denied: Only staff/admin or the user themselves can view registration details',
+      404: 'Staff qualification not found for this user',
+      500: 'Failed to get staff qualification registration details'
+    },
+    NOTE: 'This endpoint retrieves professional registration details for a specific qualification. Staff/admin can view any employee details, while employees can only view their own. Useful for checking registration status and expiry dates.'
+  },
+  {
+    method: 'PUT',
+    path: '/api/update-password',
+    description: 'Updates user password. Only accessible by Staff - Standard User or System Admin. Requires username and newPassword fields.',
+    bodyParams: ['username', 'newPassword'],
+    headers: ['Authorization: Bearer <JWT token> (Staff - Standard User or System Admin)'],
+    example: {
+      "username": "user@example.com",
+      "newPassword": "NewPassword123"
+    },
+    NOTE: 'This endpoint allows staff or admin to reset a user password without requiring the old password. Only staff or admin can perform this action.'
+  },
+  {
     method: 'PUT',
     path: '/api/update-password',
     description: 'Updates user password. Only accessible by Staff - Standard User or System Admin. Requires username and newPassword fields.',
