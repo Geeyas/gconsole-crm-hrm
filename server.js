@@ -61,14 +61,17 @@ const corsOptions = {
     // 'https://workforce-mgmt-61603.firebaseapp.com',
     // 'https://hrm.ygit.tech',
     'http://localhost:4200',
-    'https://rostermatic.netlify.app/',
+    // 'https://rostermatic.netlify.app/',
     'https://rostermatic-b2ae0.web.app/',
     'https://rostermatic-b2ae0.web.app',
-    'https://console.firebase.google.com/project/rostermatic-b2ae0/overview',
-    'https://rostermatic-b2ae0.firebaseapp.com/',
-    'https://rostermatic-b2ae0.firebaseapp.com',
-    'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app/',
-    'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app',
+    // 'https://console.firebase.google.com/project/rostermatic-b2ae0/overview',
+    // 'https://rostermatic-b2ae0.firebaseapp.com/',
+    // 'https://rostermatic-b2ae0.firebaseapp.com',
+    // 'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app/',
+    // 'https://nurselink-api-prod-1073214940443.australia-southeast2.run.app',
+
+    // 'https://nurselink-api-prod-807756312040.australia-southeast2.run.app',
+    // 'https://nurselink-api-prod-807756312040.australia-southeast2.run.app/',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'cache-control'],
@@ -111,14 +114,8 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Limit URL-encoded payload size
 
-// Debug middleware to log request body
-app.use((req, res, next) => {
-  if (req.method === 'POST' && req.headers['content-type']?.includes('application/json')) {
-    console.log('Request body before parsing:', req.body);
-    console.log('Request headers:', req.headers);
-  }
-  next();
-});
+// Request logging middleware
+app.use(requestLogger);
 
 app.use(limiter);
 

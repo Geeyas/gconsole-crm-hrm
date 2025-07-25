@@ -67,11 +67,11 @@ const registerValidation = [
   body('firstname')
     .trim()
     .isLength({ min: 1, max: 50 }).withMessage('First name must be 1-50 characters')
-    .matches(/^[a-zA-Z\s'-]+$/).withMessage('First name contains invalid characters'),
+    .matches(/^[a-zA-ZÀ-ÿĀ-žА-я\u4e00-\u9fff\s'-]+$/).withMessage('First name contains invalid characters'),
   body('lastname')
     .trim()
     .isLength({ min: 1, max: 50 }).withMessage('Last name must be 1-50 characters')
-    .matches(/^[a-zA-Z\s'-]+$/).withMessage('Last name contains invalid characters'),
+    .matches(/^[a-zA-ZÀ-ÿĀ-žА-я\u4e00-\u9fff\s'-]+$/).withMessage('Last name contains invalid characters'),
   body('usertype_id')
     .isInt({ min: 1, max: 4 }).withMessage('Invalid usertype_id'),
 ];

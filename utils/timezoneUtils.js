@@ -65,6 +65,15 @@ function utcToMelbourne(utcDateTime) {
 function formatDate(date) {
   if (!date) return null;
   try {
+    // If it's already a string in YYYY-MM-DD format, return as is
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    // If it's a string with time, extract just the date part
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)) {
+      return date.substring(0, 10);
+    }
+    // Fallback to Date object conversion
     return DateTime.fromJSDate(new Date(date)).toFormat('yyyy-MM-dd');
   } catch {
     return null;
@@ -79,6 +88,19 @@ function formatDate(date) {
 function formatDateTime(date) {
   if (!date) return null;
   try {
+    // If it's already a string in YYYY-MM-DD HH:mm format, return as is
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(date)) {
+      return date;
+    }
+    // If it's a string with seconds, truncate to minutes
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(date)) {
+      return date.substring(0, 16);
+    }
+    // If it's just a date string, add default time
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return `${date} 00:00`;
+    }
+    // Fallback to Date object conversion
     return DateTime.fromJSDate(new Date(date)).toFormat('yyyy-MM-dd HH:mm');
   } catch {
     return null;
@@ -96,11 +118,74 @@ function utcToMelbourneForAPI(utcDateTime) {
   return melbourneTime.substring(0, 16);
 }
 
+/**
+ * Format date for email display (handles VARCHAR strings from database)
+ * @param {string} dateString - Date string from database
+ * @returns {string|null} - Formatted date for email or null if invalid
+ */
+function formatDateForEmail(dateString) {
+  if (!dateString) return null;
+  
+  // If it's already a properly formatted date string, return as is
+  if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  // If it's a datetime string, extract just the date part
+  if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+    return dateString.substring(0, 10);
+  }
+  
+  // Try to parse and format
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString().substring(0, 10);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format datetime for email display (handles VARCHAR strings from database)
+ * @param {string} dateTimeString - DateTime string from database
+ * @returns {string|null} - Formatted datetime for email or null if invalid
+ */
+function formatDateTimeForEmail(dateTimeString) {
+  if (!dateTimeString) return null;
+  
+  // If it's already a properly formatted datetime string, return as is
+  if (typeof dateTimeString === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTimeString)) {
+    return dateTimeString;
+  }
+  
+  // If it's a datetime string with seconds, truncate to minutes
+  if (typeof dateTimeString === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateTimeString)) {
+    return dateTimeString.substring(0, 16);
+  }
+  
+  // If it's just a date string, add default time
+  if (typeof dateTimeString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateTimeString)) {
+    return `${dateTimeString} 00:00`;
+  }
+  
+  // Try to parse and format
+  try {
+    const date = new Date(dateTimeString);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString().substring(0, 16).replace('T', ' ');
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   toUTC,
   formatForMySQL,
   utcToMelbourne,
   formatDate,
   formatDateTime,
-  utcToMelbourneForAPI
+  utcToMelbourneForAPI,
+  formatDateForEmail,
+  formatDateTimeForEmail
 }; 

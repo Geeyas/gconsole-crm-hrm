@@ -336,7 +336,9 @@ const {
   formatForMySQL, 
   utcToMelbourneForAPI, 
   formatDate, 
-  formatDateTime 
+  formatDateTime,
+  formatDateForEmail,
+  formatDateTimeForEmail
 } = require('../utils/timezoneUtils');
 
 const jwtSecret = process.env.JWT_SECRET;
@@ -604,18 +606,19 @@ exports.register = async (req, res) => {
     const hash = await hashPassword(password);
     const fullname = `${firstname} ${lastname}`;
 
+    const now = new Date();
     const [peopleResult] = await db.query(
       `INSERT INTO People (Firstname, Lastname, Emailaddress, Hiredate, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
-       VALUES (?, ?, ?, NOW(), NOW(), ?, NOW(), ?, NOW())`,
-      [firstname, lastname, email, creatorId, creatorId]
+       VALUES (?, ?, ?, NOW(), NOW(), ?, NOW(), ?, ?)`,
+      [firstname, lastname, email, creatorId, creatorId, now]
     );
 
     const personId = peopleResult.insertId;
 
     const [userResult] = await db.query(
-      `INSERT INTO Users (fullname, username, email, passwordhash, createdat, createdbyid, updatedat, updatedbyid)
-       VALUES (?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
-      [fullname, email, email, hash, creatorId, creatorId]
+      `INSERT INTO Users (fullname, username, email, passwordhash, createdat, createdbyid, updatedat, updatedbyid, Sysstarttime)
+       VALUES (?, ?, ?, ?, NOW(), ?, NOW(), ?, ?)`,
+      [fullname, email, email, hash, creatorId, creatorId, now]
     );
 
     const userId = userResult.insertId;
@@ -626,9 +629,9 @@ exports.register = async (req, res) => {
     );
 
     await db.query(
-      `INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedbyid)
-       VALUES (?, ?, NOW(), ?, ?)`,
-      [userId, usertype_id, creatorId, creatorId]
+      `INSERT INTO Assignedusertypes (Userid, Usertypeid, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
+       VALUES (?, ?, NOW(), ?, NOW(), ?, ?)`,
+      [userId, usertype_id, creatorId, creatorId, now]
     );
 
     res.status(201).json({ message: 'User registered successfully', userId });
@@ -1031,13 +1034,18 @@ exports.createClientShiftRequest = async (req, res) => {
       // Await all emails before responding
       await Promise.all(qualifiedEmployeeRows.map(async (emp) => {
         logger.info('Sending shift notification email', { to: emp.email });
+        // Format dates for email - handle VARCHAR strings from database
+        const formattedShiftDate = formatDateForEmail(shift.Shiftdate);
+        const formattedStartTime = formatDateTimeForEmail(shift.Starttime);
+        const formattedEndTime = formatDateTimeForEmail(shift.Endtime);
+        
         const template = mailTemplates.shiftNewEmployee({
           employeeName: emp.fullname,
           locationName,
           clientName,
-          shiftDate: shift.Shiftdate,
-          startTime: shift.Starttime,
-          endTime: shift.Endtime,
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime,
           qualificationNames: qualificationname
         });
         try {
@@ -1573,11 +1581,6 @@ exports.getAvailableClientShifts = async (req, res) => {
       );
       // Filter out soft-deleted slots in code (defensive)
       staffShifts = staffRows.filter(s => !s.Deletedat);
-      
-      // For employees, only show 'open' status shifts
-      if (userType === 'Employee - Standard User') {
-        staffShifts = staffShifts.filter(s => s.Status === 'open');
-      }
     }
     
     // Group staff shifts by shiftrequestid
@@ -1690,12 +1693,17 @@ exports.acceptClientStaffShift = async (req, res) => {
       `, [updatedShift.Clientid]);
 
       for (const client of clientUsers) {
+        // Format dates for email - handle VARCHAR strings from database
+        const formattedShiftDate = formatDateForEmail(updatedShift.Shiftdate);
+        const formattedStartTime = formatDateTimeForEmail(updatedShift.Starttime);
+        const formattedEndTime = formatDateTimeForEmail(updatedShift.Endtime);
+        
         const template = mailTemplates.shiftAcceptedClient({
           clientName: client.clientName,
           locationName: updatedShift.LocationName,
-          shiftDate: updatedShift.Shiftdate,
-          startTime: updatedShift.Starttime,
-          endTime: updatedShift.Endtime,
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime,
           employeeName: updatedShift.employeeName || 'An employee'
         });
         if (client.email) {
@@ -1753,13 +1761,18 @@ exports.approveClientStaffShift = async (req, res) => {
     if (updatedShift) {
       // Notify employee
       if (updatedShift.employeeEmail) {
+        // Format dates for email - handle VARCHAR strings from database
+        const formattedShiftDate = formatDateForEmail(updatedShift.Shiftdate);
+        const formattedStartTime = formatDateTimeForEmail(updatedShift.Starttime);
+        const formattedEndTime = formatDateTimeForEmail(updatedShift.Endtime);
+        
         const templateEmp = mailTemplates.shiftApprovedEmployee({
           employeeName: updatedShift.employeeName,
           clientName: updatedShift.clientname,
           locationName: updatedShift.LocationName,
-          shiftDate: updatedShift.Shiftdate,
-          startTime: updatedShift.Starttime,
-          endTime: updatedShift.Endtime
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime
         });
         sendMail({
           to: updatedShift.employeeEmail,
@@ -1776,13 +1789,18 @@ exports.approveClientStaffShift = async (req, res) => {
         WHERE uc.clientid = ?
       `, [updatedShift.Clientid]);
       for (const client of clientUsers) {
+        // Format dates for email - handle VARCHAR strings from database
+        const formattedShiftDate = formatDateForEmail(updatedShift.Shiftdate);
+        const formattedStartTime = formatDateTimeForEmail(updatedShift.Starttime);
+        const formattedEndTime = formatDateTimeForEmail(updatedShift.Endtime);
+        
         const templateClient = mailTemplates.shiftApprovedClient({
           clientName: client.clientName,
           employeeName: updatedShift.employeeName,
           locationName: updatedShift.LocationName,
-          shiftDate: updatedShift.Shiftdate,
-          startTime: updatedShift.Starttime,
-          endTime: updatedShift.Endtime
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime
         });
         if (client.email) {
           sendMail({
@@ -1843,13 +1861,18 @@ exports.rejectClientStaffShift = async (req, res) => {
     const prevEmployee = prevEmployeeRows[0] || {};
     // 4. Notify employee (if there was one assigned)
     if (prevEmployee.employeeEmail) {
+      // Format dates for email - handle VARCHAR strings from database
+      const formattedShiftDate = formatDateForEmail(updatedShiftRows[0]?.Shiftdate);
+      const formattedStartTime = formatDateTimeForEmail(updatedShiftRows[0]?.Starttime);
+      const formattedEndTime = formatDateTimeForEmail(updatedShiftRows[0]?.Endtime);
+      
       const templateEmp = mailTemplates.shiftRejectedEmployee({
         employeeName: prevEmployee.employeeName,
         clientName: updatedShiftRows[0]?.clientname,
         locationName: updatedShiftRows[0]?.LocationName,
-        shiftDate: updatedShiftRows[0]?.Shiftdate,
-        startTime: updatedShiftRows[0]?.Starttime,
-        endTime: updatedShiftRows[0]?.Endtime
+        shiftDate: formattedShiftDate,
+        startTime: formattedStartTime,
+        endTime: formattedEndTime
       });
       sendMail({
         to: prevEmployee.employeeEmail,
@@ -2146,13 +2169,18 @@ exports.updateClientShiftRequest = async (req, res) => {
     );
     for (const slot of approvedSlots) {
       if (slot.email) {
+        // Format dates for email - handle VARCHAR strings from database
+        const formattedShiftDate = formatDateForEmail(updatedRows[0].Shiftdate);
+        const formattedStartTime = formatDateTimeForEmail(updatedRows[0].Starttime);
+        const formattedEndTime = formatDateTimeForEmail(updatedRows[0].Endtime);
+        
         const templateEmp = mailTemplates.shiftUpdatedEmployee({
           employeeName: slot.fullname,
           clientName: slot.clientname,
           locationName: slot.LocationName,
-          shiftDate: updatedRows[0].Shiftdate,
-          startTime: updatedRows[0].Starttime,
-          endTime: updatedRows[0].Endtime
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime
         });
         sendMail({
           to: slot.email,
@@ -2355,13 +2383,18 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
     // 5. Send notification to employee and all client users for this client
     // Notify employee
     if (employee.email) {
+      // Format dates for email - handle VARCHAR strings from database
+      const formattedShiftDate = formatDateForEmail(shiftSlot.Shiftdate);
+      const formattedStartTime = formatDateTimeForEmail(shiftSlot.Starttime);
+      const formattedEndTime = formatDateTimeForEmail(shiftSlot.Endtime);
+      
       const templateEmp = mailTemplates.shiftApprovedEmployee({
         employeeName: employee.fullname,
         clientName: shiftSlot.clientname,
         locationName: shiftSlot.LocationName,
-        shiftDate: shiftSlot.Shiftdate,
-        startTime: shiftSlot.Starttime,
-        endTime: shiftSlot.Endtime
+        shiftDate: formattedShiftDate,
+        startTime: formattedStartTime,
+        endTime: formattedEndTime
       });
       sendMail({
         to: employee.email,
@@ -2384,13 +2417,18 @@ exports.assignEmployeeToStaffShift = async (req, res) => {
       )
     `, [staffShiftId]);
     for (const client of clientUsers) {
+      // Format dates for email - handle VARCHAR strings from database
+      const formattedShiftDate = formatDateForEmail(shiftSlot.Shiftdate);
+      const formattedStartTime = formatDateTimeForEmail(shiftSlot.Starttime);
+      const formattedEndTime = formatDateTimeForEmail(shiftSlot.Endtime);
+      
       const templateClient = mailTemplates.shiftApprovedClient({
         clientName: client.clientName,
         employeeName: employee.fullname,
         locationName: shiftSlot.LocationName,
-        shiftDate: shiftSlot.Shiftdate,
-        startTime: shiftSlot.Starttime,
-        endTime: shiftSlot.Endtime
+        shiftDate: formattedShiftDate,
+        startTime: formattedStartTime,
+        endTime: formattedEndTime
       });
       if (client.email) {
         sendMail({
@@ -2455,13 +2493,18 @@ exports.removeEmployeeFromStaffShift = async (req, res) => {
 
     // 3. Notify the removed employee
     if (slot.email) {
+      // Format dates for email - handle VARCHAR strings from database
+      const formattedShiftDate = formatDateForEmail(slot.Shiftdate);
+      const formattedStartTime = formatDateTimeForEmail(slot.Starttime);
+      const formattedEndTime = formatDateTimeForEmail(slot.Endtime);
+      
       const templateEmp = mailTemplates.shiftRemovedEmployee({
         employeeName: slot.fullname,
         clientName: slot.clientname,
         locationName: slot.LocationName,
-        shiftDate: slot.Shiftdate,
-        startTime: slot.Starttime,
-        endTime: slot.Endtime
+        shiftDate: formattedShiftDate,
+        startTime: formattedStartTime,
+        endTime: formattedEndTime
       });
       sendMail({
         to: slot.email,
