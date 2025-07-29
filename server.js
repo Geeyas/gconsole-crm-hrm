@@ -19,8 +19,10 @@ const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const timesheetRoutes = require('./routes/timesheetRoutes');
 
 const app = express();
+app.set('trust proxy', 1); // Fix: trust proxy for correct client IP detection (Cloud Run, load balancers)
 app.use(cookieParser());
 
 // Winston logger setup
@@ -177,6 +179,7 @@ app.get('/api', (req, res) => {
 app.use('/api', publicRoutes);
 app.use('/api', authRoutes);
 app.use('/api', clientRoutes);
+app.use('/api/timesheets', timesheetRoutes); // MOVED BEFORE crudRoutes to prevent conflicts
 app.use('/api', crudRoutes);
 
 // Handle 404 for unknown API routes

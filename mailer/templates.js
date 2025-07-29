@@ -344,6 +344,174 @@ function contactAdminConfirmation({ email, subject }) {
   };
 }
 
+/**
+ * Timesheet Submission Notification (to admin/staff)
+ * @param {Object} param0
+ * @param {string} param0.employeeName - Employee who submitted timesheet
+ * @param {string} param0.employeeEmail - Employee's email
+ * @param {string} param0.weekStartDate - Week start date (YYYY-MM-DD)
+ * @param {string} param0.weekEndDate - Week end date (YYYY-MM-DD)
+ * @param {number} param0.totalHours - Total hours for the week
+ * @param {number} param0.totalEntries - Number of entries submitted
+ * @param {string} param0.submittedAt - Submission timestamp
+ */
+function timesheetSubmissionNotification({ employeeName, employeeEmail, weekStartDate, weekEndDate, totalHours, totalEntries, submittedAt }) {
+  return {
+    subject: `📋 Timesheet Submitted: ${employeeName} (Week ${weekStartDate})`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <h2 style="color: #ff9800; text-align: center;">📋 Timesheet Submitted for Review</h2>
+        
+        <p style="font-size: 16px;">Dear Admin/Staff,</p>
+
+        <p style="font-size: 15px; line-height: 1.6;">
+          <strong>${employeeName}</strong> (${employeeEmail}) has submitted their timesheet for review.
+        </p>
+
+        <div style="background-color: #fff8e1; border: 1px solid #ffcc02; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #ff8f00; margin: 0 0 15px 0; text-align: center;">Timesheet Summary</h3>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">👤 Employee:</span>
+            <span>${employeeName}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">📧 Email:</span>
+            <span>${employeeEmail}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">📅 Week Period:</span>
+            <span>${weekStartDate} to ${weekEndDate}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">⏱️ Total Hours:</span>
+            <span style="color: #ff8f00; font-weight: bold;">${totalHours} hours</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">📝 Total Entries:</span>
+            <span>${totalEntries} entries</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: bold;">🕐 Submitted At:</span>
+            <span>${submittedAt}</span>
+          </div>
+        </div>
+
+        <div style="background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0; color: #1976d2; font-weight: bold;">📎 Attachment Included</p>
+          <p style="margin: 5px 0 0 0; font-size: 14px;">The detailed timesheet CSV file is attached to this email for your review.</p>
+        </div>
+
+        <div style="text-align: center; margin: 25px 0;">
+          <p style="font-size: 15px; margin-bottom: 10px;">Please review and take action:</p>
+          <div style="display: inline-block;">
+            <span style="display: inline-block; background: #4caf50; color: white; padding: 8px 16px; border-radius: 4px; margin: 0 5px; font-size: 14px;">✅ Approve</span>
+            <span style="display: inline-block; background: #f44336; color: white; padding: 8px 16px; border-radius: 4px; margin: 0 5px; font-size: 14px;">❌ Reject</span>
+          </div>
+        </div>
+
+        <p style="font-size: 14px; color: #666; line-height: 1.6;">
+          <strong>Next Steps:</strong><br/>
+          • Review the attached CSV file for detailed timesheet entries<br/>
+          • Log in to the admin portal to approve or reject the timesheet<br/>
+          • Employee will be notified of your decision automatically
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
+/**
+ * Timesheet Submission Confirmation (to employee)
+ * @param {Object} param0
+ * @param {string} param0.employeeName - Employee who submitted timesheet
+ * @param {string} param0.weekStartDate - Week start date (YYYY-MM-DD)
+ * @param {string} param0.weekEndDate - Week end date (YYYY-MM-DD)
+ * @param {number} param0.totalHours - Total hours for the week
+ * @param {number} param0.totalEntries - Number of entries submitted
+ * @param {string} param0.submittedAt - Submission timestamp
+ */
+function timesheetSubmissionConfirmation({ employeeName, weekStartDate, weekEndDate, totalHours, totalEntries, submittedAt }) {
+  return {
+    subject: `✅ Timesheet Submitted Successfully - Week ${weekStartDate}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <h2 style="color: #4caf50; text-align: center;">✅ Timesheet Submitted Successfully</h2>
+        
+        <p style="font-size: 16px;">Dear <strong>${employeeName}</strong>,</p>
+
+        <p style="font-size: 15px; line-height: 1.6;">
+          Your timesheet has been <strong>successfully submitted</strong> and is now awaiting review by the admin team.
+        </p>
+
+        <div style="background-color: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #2e7d32; margin: 0 0 15px 0; text-align: center;">📊 Your Submission Summary</h3>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">📅 Week Period:</span>
+            <span>${weekStartDate} to ${weekEndDate}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">⏱️ Total Hours:</span>
+            <span style="color: #2e7d32; font-weight: bold;">${totalHours} hours</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="font-weight: bold;">📝 Total Entries:</span>
+            <span>${totalEntries} entries</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between;">
+            <span style="font-weight: bold;">🕐 Submitted At:</span>
+            <span>${submittedAt}</span>
+          </div>
+        </div>
+
+        <div style="background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0; color: #1976d2; font-weight: bold;">📎 Your Timesheet Copy Attached</p>
+          <p style="margin: 5px 0 0 0; font-size: 14px;">A copy of your submitted timesheet is attached for your records. The same file has been sent to the admin team for review.</p>
+        </div>
+
+        <div style="background-color: #fff3c4; border: 1px solid #ff9800; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #ff8f00;">🔄 What happens next?</h4>
+          <ul style="margin: 0; padding-left: 20px; color: #666;">
+            <li>Your timesheet is now under review by the admin team</li>
+            <li>You will receive an email notification once it's approved or if changes are needed</li>
+            <li>Status: <strong style="color: #ff8f00;">Submitted - Awaiting Review</strong></li>
+          </ul>
+        </div>
+
+        <div style="text-align: center; margin: 25px 0;">
+          <p style="font-size: 15px; margin-bottom: 10px;">📋 Need to make changes?</p>
+          <p style="font-size: 14px; color: #666;">If your timesheet is rejected, you'll be able to edit and resubmit it. No action is needed from you at this time.</p>
+        </div>
+
+        <p style="font-size: 15px; line-height: 1.6;">
+          Thank you for submitting your timesheet on time. If you have any questions, please contact your supervisor.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated confirmation from <strong>GConsole HRM</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
 module.exports = {
   shiftAcceptedClient,
   shiftApprovedEmployee,
@@ -353,5 +521,7 @@ module.exports = {
   shiftUpdatedEmployee,
   shiftRemovedEmployee,
   contactAdminNotification,
-  contactAdminConfirmation
+  contactAdminConfirmation,
+  timesheetSubmissionNotification,
+  timesheetSubmissionConfirmation
 };
