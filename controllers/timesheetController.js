@@ -230,6 +230,13 @@ exports.createTimesheetEntry = async (req, res) => {
 
     const now = new Date();
 
+    // Process client signature - remove data URL prefix if present
+    let processedSignature = client_signature;
+    if (client_signature && client_signature.startsWith('data:image')) {
+      // Remove the data URL prefix to store only the base64 data
+      processedSignature = client_signature.replace(/^data:image\/[^;]+;base64,/, '');
+    }
+
     // Insert timesheet entry with FK checks temporarily disabled
     await db.query('SET FOREIGN_KEY_CHECKS = 0');
     const [result] = await db.query(`
@@ -243,7 +250,7 @@ exports.createTimesheetEntry = async (req, res) => {
       userId, signintime, signouttime, breakMins.toString(), 
       location_name || '', notes || '', duration.toFixed(2), 
       userId, userId,
-      client_name || null, client_signature || null, client_signature_date || null, client_notes || null
+      client_name || null, processedSignature || null, client_signature_date || null, client_notes || null
     ]);
     await db.query('SET FOREIGN_KEY_CHECKS = 1');
 
