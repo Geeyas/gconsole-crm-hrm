@@ -180,6 +180,25 @@ const contactAdminValidation = [
     .isLength({ max: 100 }).withMessage('Source must be at most 100 characters')
 ];
 
+// Admin/Staff Email Validation
+const adminStaffEmailValidation = [
+  body('subject')
+    .notEmpty().withMessage('Subject is required')
+    .isLength({ min: 3, max: 200 }).withMessage('Subject must be 3-200 characters'),
+  body('message')
+    .notEmpty().withMessage('Message is required')
+    .isLength({ min: 5, max: 5000 }).withMessage('Message must be 5-5000 characters'),
+  body('recipientEmail')
+    .notEmpty().withMessage('Recipient email is required')
+    .isEmail().withMessage('Invalid recipient email format')
+    .isLength({ max: 255 }).withMessage('Recipient email too long'),
+  body('recipientName')
+    .optional()
+    .trim()
+    .isLength({ min: 1, max: 100 }).withMessage('Recipient name must be 1-100 characters')
+    .matches(/^[a-zA-ZÀ-ÿĀ-žА-я\u4e00-\u9fff\s'-]+$/).withMessage('Recipient name contains invalid characters')
+];
+
 module.exports = {
   createShiftValidation,
   registerValidation,
@@ -192,5 +211,6 @@ module.exports = {
   sanitizeEmail,
   sanitizeUsername,
   sanitizePhone,
-  contactAdminValidation
+  contactAdminValidation,
+  adminStaffEmailValidation
 };

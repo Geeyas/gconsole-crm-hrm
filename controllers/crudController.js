@@ -588,3 +588,76 @@ exports.contactAdmin = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to send email. Please try again later.' });
   }
 };
+
+/**
+ * Handles POST /api/send-email
+ * Sends email from admin/staff to specified recipient
+ */
+exports.sendEmail = async (req, res) => {
+  const { subject, message, recipientEmail, recipientName } = req.body;
+  const senderName = req.user?.fullname || req.user?.username || 'Admin';
+  const senderEmail = req.user?.email || 'admin@gconsole.com';
+  const sentAt = new Date().toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+
+  try {
+    // Create email template
+    const emailTemplate = mailTemplates.adminStaffEmail({
+      subject,
+      message,
+      senderName,
+      senderEmail,
+      recipientName,
+      recipientEmail,
+      sentAt
+    });
+
+    // Send email
+    await sendMail({
+      to: recipientEmail,
+      subject: emailTemplate.subject,
+      html: emailTemplate.html,
+      replyTo: senderEmail
+    });
+
+    // Log the email sending
+    logger.info(`Admin/Staff email sent`, {
+      sender: senderName,
+      senderEmail: senderEmail,
+      recipient: recipientName || 'Unknown',
+      recipientEmail: recipientEmail,
+      subject: subject,
+      timestamp: new Date().toISOString(),
+      action: 'send_admin_email',
+      userId: req.user?.id
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Email sent successfully.',
+      data: {
+        sentAt,
+        recipient: recipientName || recipientEmail,
+        subject
+      }
+    });
+  } catch (err) {
+    logger.error('Admin/Staff email error', { 
+      error: err.message,
+      sender: senderName,
+      recipient: recipientEmail,
+      subject: subject,
+      userId: req.user?.id
+    });
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send email. Please try again later.' 
+    });
+  }
+};

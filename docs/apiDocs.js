@@ -1193,6 +1193,45 @@ curl -X GET https://your-api-domain/api/my-shifts \
       }
     },
     NOTE: 'All fields required except source. Email is validated. Rate limited. Sends notification to admin@ygit.tech and confirmation to the user.'
+  },
+  {
+    method: 'POST',
+    path: '/api/admin/send-email',
+    description: 'Admin/Staff Email: Sends an email from admin/staff user to specified recipient. Requires authentication and admin/staff privileges.',
+    userType: ['System Admin', 'Staff - Standard User'],
+    headers: ['Authorization: Bearer <JWT token> (System Admin or Staff - Standard User)'],
+    bodyParams: ['subject', 'message', 'recipientEmail', 'recipientName (optional)'],
+    example: {
+      request: {
+        url: '/api/admin/send-email',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer <JWT token>',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          subject: 'Welcome to Our Team',
+          message: 'Dear John,\n\nWelcome to our team! We are excited to have you on board.\n\nBest regards,\nHR Team',
+          recipientEmail: 'john@example.com',
+          recipientName: 'John Doe'
+        }
+      },
+      responses: {
+        200: { 
+          success: true, 
+          message: 'Email sent successfully.',
+          data: {
+            sentAt: 'December 15, 2023 at 02:30 PM EST',
+            recipient: 'John Doe',
+            subject: 'Welcome to Our Team'
+          }
+        },
+        400: { message: 'Validation error', errors: [{ field: 'recipientEmail', message: 'Invalid recipient email format' }] },
+        401: { success: false, error: 'Access denied. Admin or Staff privileges required.' },
+        500: { success: false, error: 'Failed to send email. Please try again later.' }
+      }
+    },
+    NOTE: 'Requires authentication and admin/staff privileges. Sends professional email with custom template. All email sends are logged with user information for audit trails.'
   }
 ];
 

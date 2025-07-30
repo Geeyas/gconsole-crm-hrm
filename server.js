@@ -20,6 +20,7 @@ const crudRoutes = require('./routes/crudRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const timesheetRoutes = require('./routes/timesheetRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 app.set('trust proxy', 1); // Fix: trust proxy for correct client IP detection (Cloud Run, load balancers)
@@ -181,6 +182,7 @@ app.use('/api', authRoutes);
 app.use('/api', clientRoutes);
 app.use('/api/timesheets', timesheetRoutes); // MOVED BEFORE crudRoutes to prevent conflicts
 app.use('/api', crudRoutes);
+app.use('/api/admin', adminRoutes); // Admin/Staff functionality
 
 // Handle 404 for unknown API routes
 app.use('/api/', (req, res) => {

@@ -311,7 +311,7 @@ function contactAdminNotification({ email, subject, message, source }) {
  */
 function contactAdminConfirmation({ email, subject }) {
   return {
-    subject: `We have received your message – Shiftly Support` ,
+    subject: `We have received your message – Shiftly Support`,
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
         <div style="text-align:center; margin-bottom: 20px;">
@@ -512,6 +512,67 @@ function timesheetSubmissionConfirmation({ employeeName, weekStartDate, weekEndD
   };
 }
 
+/**
+ * Admin/Staff Email Template
+ * @param {Object} param0
+ * @param {string} param0.subject - Email subject
+ * @param {string} param0.message - Email body content
+ * @param {string} param0.senderName - Name of the person sending the email
+ * @param {string} param0.senderEmail - Email of the person sending the email
+ * @param {string} param0.recipientName - Name of the recipient (optional)
+ * @param {string} param0.recipientEmail - Email of the recipient
+ * @param {string} param0.sentAt - Timestamp when email was sent
+ */
+function adminStaffEmail({ subject, message, senderName, senderEmail, recipientName, recipientEmail, sentAt }) {
+  return {
+    subject: subject,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <div style="text-align:center; margin-bottom: 20px;">
+          <span style="display:inline-block; font-size:2rem; font-weight:bold; line-height:1;">
+            <svg width="110" height="36" viewBox="0 0 110 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+              <defs>
+                <linearGradient id="shiftly-gradient" x1="0" y1="0" x2="110" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2563eb"/>
+                  <stop offset="1" stop-color="#14b8a6"/>
+                </linearGradient>
+              </defs>
+              <text x="0" y="28" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="bold" fill="url(#shiftly-gradient)">Shiftly</text>
+            </svg>
+          </span>
+        </div>
+        
+        <h2 style="color: #1976d2; text-align: center;">📧 Message from ${senderName}</h2>
+        
+        <div style="background-color: #f4f6f8; border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <div style="margin-bottom: 15px;">
+            <p style="margin: 0; font-size: 14px; color: #666;"><strong>From:</strong> ${senderName} (${senderEmail})</p>
+            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;"><strong>To:</strong> ${recipientName ? `${recipientName} ` : ''}(${recipientEmail})</p>
+            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;"><strong>Subject:</strong> ${subject}</p>
+            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;"><strong>Sent:</strong> ${sentAt}</p>
+          </div>
+        </div>
+
+        <div style="background-color: #ffffff; border: 1px solid #e0e6ed; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #1976d2; margin: 0 0 15px 0;">Message Content</h3>
+          <div style="font-size: 15px; line-height: 1.6; color: #333; white-space: pre-wrap;">${message}</div>
+        </div>
+
+        <div style="background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0; color: #1976d2; font-weight: bold;">📧 This email was sent via GConsole HRM</p>
+          <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">Sent by ${senderName}</p>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
 module.exports = {
   shiftAcceptedClient,
   shiftApprovedEmployee,
@@ -523,5 +584,6 @@ module.exports = {
   contactAdminNotification,
   contactAdminConfirmation,
   timesheetSubmissionNotification,
-  timesheetSubmissionConfirmation
+  timesheetSubmissionConfirmation,
+  adminStaffEmail
 };
