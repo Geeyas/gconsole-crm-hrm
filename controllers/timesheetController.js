@@ -174,7 +174,9 @@ exports.createTimesheetEntry = async (req, res) => {
     client_name,
     client_signature,
     client_signature_date,
-    client_notes
+    client_notes,
+    client_staff_shift_id,      // NEW: Link to specific accepted shift
+    client_shift_request_id     // NEW: Optional fallback
   } = req.body;
 
   if (!userId) {
@@ -187,6 +189,66 @@ exports.createTimesheetEntry = async (req, res) => {
   }
 
   try {
+    // Validate and determine shift IDs
+    let finalClientShiftRequestId = null;
+    let finalClientStaffShiftId = null;
+
+    if (client_staff_shift_id) {
+      // OPTION A: Employee is working from an accepted shift
+      const [shiftRows] = await db.query(`
+        SELECT css.*, csr.id as request_id 
+        FROM Clientstaffshifts css 
+        LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
+        WHERE css.id = ? AND css.Assignedtouserid = ? AND css.Deletedat IS NULL
+      `, [client_staff_shift_id, userId]);
+
+      if (shiftRows.length === 0) {
+        return res.status(404).json({ 
+          message: 'Shift not found or not assigned to you',
+          code: 'SHIFT_NOT_FOUND' 
+        });
+      }
+
+      const assignedShift = shiftRows[0];
+      finalClientShiftRequestId = assignedShift.request_id;
+      finalClientStaffShiftId = client_staff_shift_id;
+
+      logger.info('Creating timesheet for accepted shift', { 
+        userId, 
+        shiftId: client_staff_shift_id, 
+        requestId: finalClientShiftRequestId 
+      });
+
+    } else if (client_shift_request_id) {
+      // OPTION B: Manual entry referencing a shift request
+      const [requestRows] = await db.query(
+        'SELECT id FROM Clientshiftrequests WHERE id = ? AND Deletedat IS NULL', 
+        [client_shift_request_id]
+      );
+
+      if (requestRows.length === 0) {
+        return res.status(404).json({ 
+          message: 'Client shift request not found',
+          code: 'REQUEST_NOT_FOUND' 
+        });
+      }
+
+      finalClientShiftRequestId = client_shift_request_id;
+      finalClientStaffShiftId = null; // Manual entry, no specific staff shift
+
+      logger.info('Creating manual timesheet entry', { 
+        userId, 
+        requestId: finalClientShiftRequestId 
+      });
+
+    } else {
+      // OPTION C: Completely manual entry (no shift linkage)
+      finalClientShiftRequestId = null;
+      finalClientStaffShiftId = null;
+
+      logger.info('Creating independent timesheet entry', { userId });
+    }
+
     // Combine date and time for database storage
     const signintime = `${date} ${start_time}:00`;
     const signouttime = `${date} ${end_time}:00`;
@@ -237,7 +299,7 @@ exports.createTimesheetEntry = async (req, res) => {
       processedSignature = client_signature.replace(/^data:image\/[^;]+;base64,/, '');
     }
 
-    // Insert timesheet entry with FK checks temporarily disabled
+    // Insert timesheet entry with proper foreign key relationships
     await db.query('SET FOREIGN_KEY_CHECKS = 0');
     const [result] = await db.query(`
       INSERT INTO Staffshifts (
@@ -245,9 +307,9 @@ exports.createTimesheetEntry = async (req, res) => {
         Shiftnotes, Hours, Status, Createdat, Createdbyid, 
         Updatedat, Updatedbyid, Sysstarttime,
         Clientpersonalname, Clientpersonalsignature, Clientpersonalsignaturedate, Clientpersonalshiftnotes
-      ) VALUES (?, 1, 147, ?, ?, ?, ?, ?, ?, 'draft', NOW(), ?, NOW(), ?, NOW(), ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NOW(), ?, NOW(), ?, NOW(), ?, ?, ?, ?)
     `, [
-      userId, signintime, signouttime, breakMins.toString(), 
+      userId, finalClientShiftRequestId, finalClientStaffShiftId, signintime, signouttime, breakMins.toString(), 
       location_name || '', notes || '', duration.toFixed(2), 
       userId, userId,
       client_name || null, processedSignature || null, client_signature_date || null, client_notes || null

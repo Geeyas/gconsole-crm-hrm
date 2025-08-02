@@ -39,20 +39,49 @@ const logger = winston.createLogger({
   ],
 });
 
-// Rate limiting middleware (100 requests per 15 minutes per IP)
-const limiter = rateLimit({
+// ==================== RATE LIMITING CONFIGURATION ====================
+
+// 1. General API rate limiter - moderate limits for most endpoints
+const generalLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 100,
+  max: 150, // Increased from 100 to 150
   message: { message: 'Too many requests, try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Stricter rate limiter for sensitive endpoints (e.g., login/register)
+// 2. High-volume operational APIs (timesheets, shifts, user details)
+const operationalLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 500, // High limit for frequent operations
+  message: { message: 'Too many operational requests, try again in 5 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 3. Authentication endpoints - keep strict limits for security
 const authLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 5, // Max 5 requests per IP per minute
+  max: 5, // Keep strict - Max 5 requests per IP per minute
   message: { error: 'Too many login/register attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 4. Admin operations - moderate limits
+const adminLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 300, // Higher than general but lower than operational
+  message: { message: 'Too many admin requests, try again in 5 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 5. Password reset and sensitive operations
+const sensitiveOpsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 10, // Limited for security
+  message: { error: 'Too many sensitive operation attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -63,10 +92,13 @@ const corsOptions = {
     // 'https://workforce-mgmt-61603.web.app',
     // 'https://workforce-mgmt-61603.firebaseapp.com',
     // 'https://hrm.ygit.tech',
-    'http://localhost:4200',
     // 'https://rostermatic.netlify.app/',
+    'http://localhost:4200',
     'https://rostermatic-b2ae0.web.app/',
     'https://rostermatic-b2ae0.web.app',
+    'https://nurselink.shiftly.net.au/',         // Android mobile app
+    'https://nurselink.shiftly.net.au',         // Android mobile app
+    'capacitor://nurselink.shiftly.net.au'      // iOS mobile app
     // 'https://console.firebase.google.com/project/rostermatic-b2ae0/overview',
     // 'https://rostermatic-b2ae0.firebaseapp.com/',
     // 'https://rostermatic-b2ae0.firebaseapp.com',
@@ -120,19 +152,35 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Limit URL-enc
 // Request logging middleware
 app.use(requestLogger);
 
-app.use(limiter);
+// Apply general rate limiter by default
+app.use(generalLimiter);
 
-// Apply stricter limiter to login and register endpoints before routes are registered
+// ==================== SPECIFIC RATE LIMITERS ====================
+// Apply stricter limiter to authentication endpoints
 app.use('/api/login', authLimiter);
 app.use('/api/register', authLimiter);
+app.use('/api/forgot-password', sensitiveOpsLimiter);
+app.use('/api/reset-password', sensitiveOpsLimiter);
+app.use('/api/contact-admin', sensitiveOpsLimiter);
+
+// Apply operational limiter to high-frequency endpoints
+app.use('/api/timesheets', operationalLimiter);
+app.use('/api/shifts', operationalLimiter);
+app.use('/api/client-shifts', operationalLimiter);
+app.use('/api/users', operationalLimiter);
+app.use('/api/my-profile', operationalLimiter);
+app.use('/api/people', operationalLimiter);
+
+// Apply admin limiter to admin endpoints
+app.use('/api/admin', adminLimiter);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
   const { getHealthStatus } = require('./config/db');
-  
+
   try {
     const dbHealth = await getHealthStatus();
-    
+
     res.status(200).json({
       status: 'OK',
       timestamp: new Date().toISOString(),
@@ -160,7 +208,7 @@ app.post('/debug', (req, res) => {
   console.log('Body:', req.body);
   console.log('Body type:', typeof req.body);
   console.log('Body stringified:', JSON.stringify(req.body));
-  res.json({ 
+  res.json({
     message: 'Debug endpoint working',
     body: req.body,
     bodyType: typeof req.body,
@@ -194,18 +242,18 @@ app.use(errorLogger);
 
 // Global error handler (for uncaught errors)
 app.use((err, req, res, next) => {
-  logger.error('Unhandled server error', { 
-    error: err, 
-    url: req.originalUrl, 
-    method: req.method, 
+  logger.error('Unhandled server error', {
+    error: err,
+    url: req.originalUrl,
+    method: req.method,
     user: req.user,
-    requestId: req.requestId 
+    requestId: req.requestId
   });
-  res.status(500).json({ 
-    message: 'Internal server error', 
-    error: err.message, 
+  res.status(500).json({
+    message: 'Internal server error',
+    error: err.message,
     code: 'INTERNAL_SERVER_ERROR',
-    requestId: req.requestId 
+    requestId: req.requestId
   });
 });
 

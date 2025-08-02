@@ -80,7 +80,17 @@ const timesheetEntryValidation = [
     .optional()
     .trim()
     .isLength({ max: 255 })
-    .withMessage('Client notes must be 255 characters or less')
+    .withMessage('Client notes must be 255 characters or less'),
+    
+  body('client_staff_shift_id')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Client staff shift ID must be a positive integer'),
+    
+  body('client_shift_request_id')
+    .optional()  
+    .isInt({ min: 1 })
+    .withMessage('Client shift request ID must be a positive integer')
 ];
 
 // Create timesheet entry validation (requires all fields)
@@ -180,7 +190,17 @@ const createTimesheetValidation = [
     .optional()
     .trim()
     .isLength({ max: 255 })
-    .withMessage('Client notes must be 255 characters or less')
+    .withMessage('Client notes must be 255 characters or less'),
+    
+  body('client_staff_shift_id')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Client staff shift ID must be a positive integer'),
+    
+  body('client_shift_request_id')
+    .optional()  
+    .isInt({ min: 1 })
+    .withMessage('Client shift request ID must be a positive integer')
 ];
 
 // Update timesheet entry validation (all fields optional)
