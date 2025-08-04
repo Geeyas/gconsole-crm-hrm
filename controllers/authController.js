@@ -105,9 +105,9 @@ exports.addQualificationToEmployee = async (req, res) => {
       }
       // else, allow re-adding (insert new row)
     }
-    // Insert link (fill all required columns)
+    // Insert link (fill all required columns including Sysstarttime)
     await db.query(
-      'INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid, Updatedat, Updatedbyid) VALUES (?, ?, NOW(), ?, NOW(), ?)',
+      'INSERT INTO Staffqualifications (Userid, QualificationID, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime) VALUES (?, ?, NOW(), ?, NOW(), ?, NOW())',
       [userId, qualificationId, requesterId, requesterId]
     );
     return res.status(201).json({ message: 'Qualification added to employee.' });

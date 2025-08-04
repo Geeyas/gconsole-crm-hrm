@@ -12,6 +12,7 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const winston = require('winston');
 const { requestLogger, errorLogger } = require('./middleware/requestLogger');
+const { aiTrainingLogger } = require('./middleware/aiTrainingLogger');
 const { testConnection } = require('./config/db');
 
 const apiDocs = require('./docs/apiDocs');
@@ -141,6 +142,9 @@ app.use(helmet({
 
 // Response compression for better performance
 app.use(compression());
+
+// AI Training Data Collection (logs all API interactions for AI model training)
+app.use(aiTrainingLogger);
 
 // Request logging disabled for cleaner logs. Only important events and errors will be logged manually.
 // app.use(requestLogger);
@@ -284,6 +288,17 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log(red('FAILED'));
     console.log(red('  ✖ Database connection failed. Check your configuration.'));
   }
+
+  // Initialize AI Training Data Collection
+  console.log(`  ${green('✔')} AI Training Data Collection: ACTIVE`);
+  console.log(`  ${green('✔')} AI Data Directory: ./ai-training-data/`);
+  
+  // Start scheduled AI data exports (optional, run only in production)
+  if (process.env.NODE_ENV === 'production') {
+    require('./scripts/scheduledExport');
+    console.log(`  ${green('✔')} AI Export Scheduler: ENABLED`);
+  }
+  
   console.log(bold('───────────────────────────────────────────────'));
 });
 

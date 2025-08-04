@@ -5,6 +5,15 @@
   "scripts": {
     "start": "node server.js",
     "audit": "node scripts/securityAudit.js",
+    "export-ai-data": "node scripts/exportAITrainingData.js all",
+    "export-ai-openai": "node scripts/exportAITrainingData.js openai",
+    "export-ai-analytics": "node scripts/exportAITrainingData.js analytics",
+    "start-scheduler": "node scripts/scheduledExport.js",
+    "ai-testing": "node scripts/ai-training-control.js testing-mode",
+    "ai-production": "node scripts/ai-training-control.js production-mode",
+    "ai-status": "node scripts/ai-training-control.js status",
+    "ai-disable": "node scripts/ai-training-control.js disable-files",
+    "ai-enable": "node scripts/ai-training-control.js enable-files",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -24,6 +33,7 @@
     "jsonwebtoken": "^9.0.2",
     "luxon": "^3.7.1",
     "mysql2": "^3.14.0",
+    "node-cron": "^3.0.3",
     "nodemailer": "^7.0.3",
     "winston": "^3.17.0"
   },
