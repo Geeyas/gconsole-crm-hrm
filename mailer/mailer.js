@@ -18,7 +18,7 @@ const transporter = nodemailer.createTransport({
  */
 function sendMail(options) {
   const mailOptions = {
-    from: `GConsole HRM Notifications <${process.env.SMTP_USER}>`,
+    from: `${process.env.SMTP_FROM_NAME || 'Shiftly'} <${process.env.SMTP_USER}>`,
     ...options
   };
   logger.info(`Email sent`, {

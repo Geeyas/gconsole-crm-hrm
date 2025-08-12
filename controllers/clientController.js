@@ -50,6 +50,25 @@ exports.createClient = async (req, res) => {
   }
   const { Name, ...fields } = req.body;
   if (!Name) return res.status(400).json({ message: 'Name is required' });
+  
+  // Check if client with same name already exists
+  try {
+    const [existing] = await pool.query(
+      'SELECT COUNT(*) as count FROM Clients WHERE Name = ? AND Deletedat IS NULL',
+      [Name]
+    );
+    
+    if (existing[0].count > 0) {
+      return res.status(400).json({ 
+        message: 'A client with this name already exists',
+        code: 'DUPLICATE_CLIENT_NAME'
+      });
+    }
+  } catch (err) {
+    logger.error('Error checking for duplicate client name', { error: err });
+    return res.status(500).json({ message: 'Failed to validate client name', error: err.message });
+  }
+  
   // Validate fields
   const validationError = validateClientFields(fields);
   if (validationError) {

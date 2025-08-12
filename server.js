@@ -271,7 +271,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   const bold = (msg) => `\x1b[1m${msg}\x1b[0m`;
 
   console.log(bold('───────────────────────────────────────────────'));
-  console.log(bold(cyan(' GConsole HRM API Server Started ')));
+  console.log(bold(cyan(' Shiftly API Server Started ')));
   console.log(bold('───────────────────────────────────────────────'));
   console.log(`  ${green('✔')} Server running on ${cyan('http://localhost:' + PORT)}`);
   console.log(`  ${green('✔')} Environment: ${process.env.NODE_ENV || 'development'}`);

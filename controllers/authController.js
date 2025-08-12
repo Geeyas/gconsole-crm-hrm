@@ -951,6 +951,49 @@ exports.createClientShiftRequest = async (req, res) => {
       return res.status(400).json({ message: 'Invalid qualification group.' });
     }
 
+    // Check for duplicate shifts (same location, date, time, and qualification)
+    const duplicateCheckSql = `
+      SELECT csr.id, csr.Totalrequiredstaffnumber, cl.LocationName 
+      FROM Clientshiftrequests csr
+      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
+      WHERE csr.Clientlocationid = ? 
+        AND csr.Shiftdate = ? 
+        AND csr.Starttime = ? 
+        AND csr.Endtime = ? 
+        AND csr.Qualificationgroupid = ? 
+        AND csr.Deletedat IS NULL
+    `;
+    const [duplicateRows] = await dbConn.query(duplicateCheckSql, [
+      clientlocationid, 
+      shiftdateForDB, 
+      starttimeForDB, 
+      endtimeForDB, 
+      qualificationgroupid
+    ]);
+    
+    if (duplicateRows.length > 0) {
+      const existingShift = duplicateRows[0];
+      logger.info('Duplicate shift creation prevented', { 
+        existingShiftId: existingShift.id, 
+        locationId: clientlocationid,
+        shiftDate: shiftdateForDB,
+        startTime: starttimeForDB,
+        endTime: endtimeForDB,
+        qualificationGroupId: qualificationgroupid,
+        userId: createdbyid,
+        userType: userType
+      });
+      return res.status(409).json({ 
+        message: `A shift already exists for the same location, date, time, and qualification. Please modify the existing shift instead of creating a new one.`,
+        existingShift: {
+          id: existingShift.id,
+          locationName: existingShift.LocationName,
+          currentStaffNumber: existingShift.Totalrequiredstaffnumber,
+          suggestedAction: `Consider updating the staff count on shift ID ${existingShift.id} instead of creating a duplicate shift.`
+        }
+      });
+    }
+
     // Insert into Clientshiftrequests (case sensitive columns)
     const insertShiftSql = `INSERT INTO Clientshiftrequests
       (Clientid, Clientlocationid, Shiftdate, Starttime, Endtime, Qualificationgroupid, Totalrequiredstaffnumber, Additionalvalue, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
@@ -1029,8 +1072,10 @@ exports.createClientShiftRequest = async (req, res) => {
     logger.info('Qualified employee notification target list', { count: qualifiedEmployeeRows.length, emails: qualifiedEmployeeRows.map(e => e.email) });
     if (qualifiedEmployeeRows && qualifiedEmployeeRows.length) {
       const shift = createdShift[0];
+      logger.info('Shift data for email notification', { shift: shift, createdShiftLength: createdShift.length });
       const locationName = shift.LocationName || '';
       const clientName = shift.clientname || '';
+      logger.info('Email notification data', { locationName, clientName, shiftDate: shift.Shiftdate });
       // Await all emails before responding
       await Promise.all(qualifiedEmployeeRows.map(async (emp) => {
         logger.info('Sending shift notification email', { to: emp.email });
@@ -1038,6 +1083,8 @@ exports.createClientShiftRequest = async (req, res) => {
         const formattedShiftDate = formatDateForEmail(shift.Shiftdate);
         const formattedStartTime = formatDateTimeForEmail(shift.Starttime);
         const formattedEndTime = formatDateTimeForEmail(shift.Endtime);
+        
+        logger.info('Email template data', { formattedShiftDate, formattedStartTime, formattedEndTime, qualificationNames: qualificationname });
         
         const template = mailTemplates.shiftNewEmployee({
           employeeName: emp.fullname,
@@ -1049,15 +1096,78 @@ exports.createClientShiftRequest = async (req, res) => {
           qualificationNames: qualificationname
         });
         try {
+          logger.info('Attempting to send email', { to: emp.email, subject: template.subject });
           await sendMail({
             to: emp.email,
             subject: template.subject,
             html: template.html
           });
+          logger.info('Email sent successfully', { to: emp.email });
         } catch (e) {
           logger.error('Email send error (new shift to employee)', { error: e, email: emp.email });
         }
       }));
+    }
+
+    // Send notification to Admin and Staff users when Client creates a shift
+    if (userType === 'Client - Standard User') {
+      logger.info('📧 DEBUG: Client user created shift, sending admin/staff notifications');
+      
+      try {
+        // Get all Admin and Staff users
+        const [adminStaffUsers] = await db.query(`
+          SELECT u.id, u.email, u.fullname, p.Firstname, p.Lastname, ut.Name as usertype_name
+          FROM Users u
+          LEFT JOIN People p ON u.id = p.Linkeduserid
+          LEFT JOIN Assignedusertypes au ON au.Userid = u.id
+          LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
+          WHERE ut.Name IN ('System Admin', 'Staff - Standard User')
+            AND u.email IS NOT NULL
+            AND u.email != ''
+            AND u.Deletedat IS NULL
+        `);
+
+        logger.info('📧 DEBUG: Found admin/staff users for notification', { count: adminStaffUsers.length });
+
+        if (adminStaffUsers && adminStaffUsers.length > 0) {
+          const shift = createdShift[0];
+          const clientContactEmail = req.user.email || 'Not provided';
+          
+          // Send notification to each admin/staff user
+          await Promise.all(adminStaffUsers.map(async (adminUser) => {
+            logger.info('📧 DEBUG: Sending admin/staff notification', { to: adminUser.email, userType: adminUser.usertype_name });
+            
+            const formattedShiftDate = formatDateForEmail(shift.Shiftdate);
+            const formattedStartTime = formatDateTimeForEmail(shift.Starttime);
+            const formattedEndTime = formatDateTimeForEmail(shift.Endtime);
+            
+            const template = mailTemplates.shiftNewClientToAdminStaff({
+              clientName: shift.clientname || '',
+              clientContactEmail: clientContactEmail,
+              locationName: shift.LocationName || '',
+              shiftDate: formattedShiftDate,
+              startTime: formattedStartTime,
+              endTime: formattedEndTime,
+              qualificationNames: qualificationname,
+              totalRequiredStaff: shift.Totalrequiredstaffnumber || 1
+            });
+
+            try {
+              logger.info('📧 DEBUG: Attempting to send admin/staff email', { to: adminUser.email, subject: template.subject });
+              await sendMail({
+                to: adminUser.email,
+                subject: template.subject,
+                html: template.html
+              });
+              logger.info('📧 DEBUG: Admin/staff email sent successfully', { to: adminUser.email });
+            } catch (e) {
+              logger.error('Email send error (new shift to admin/staff)', { error: e, email: adminUser.email });
+            }
+          }));
+        }
+      } catch (e) {
+        logger.error('Error sending admin/staff notifications', { error: e });
+      }
     }
 
     // Respond only after notifications
@@ -1118,16 +1228,16 @@ exports.linkClientUserToLocation = async (req, res) => {
       [userid, clientid]
     );
     if (existing.length) {
-      // Fetch all locations for this client
-      const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ?', [clientid]);
+      // Fetch all active locations for this client
+      const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ? AND Deletedat IS NULL', [clientid]);
       return res.status(200).json({ message: 'User is already linked to this client.', client: { id: clientid, name: clientName }, locations });
     }
     await db.query(
       'INSERT INTO Userclients (userid, clientid) VALUES (?, ?)',
       [userid, clientid]
     );
-    // Fetch all locations for this client
-    const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ?', [clientid]);
+    // Fetch all active locations for this client
+    const [locations] = await db.query('SELECT * FROM Clientlocations WHERE clientid = ? AND Deletedat IS NULL', [clientid]);
     res.status(201).json({
       message: 'User linked to client. User now has access to all locations for this client.',
       client: { id: clientid, name: clientName },
@@ -1150,12 +1260,12 @@ exports.getMyClientLocations = async (req, res) => {
   }
   try {
     if (userType === 'System Admin' || userType === 'Staff - Standard User') {
-      // Return ALL client locations, grouped by client, EXCLUDING soft-deleted
+      // Return ALL client locations, grouped by client, EXCLUDING soft-deleted AND inactive clients
       const [locations] = await db.query(
         `SELECT cl.*, c.Name as clientname
          FROM Clientlocations cl
          LEFT JOIN Clients c ON cl.clientid = c.id
-         WHERE cl.Deletedat IS NULL`
+         WHERE cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)`
       );
       // Group by client
       const clientsMap = {};
@@ -1183,12 +1293,12 @@ exports.getMyClientLocations = async (req, res) => {
         return res.status(200).json({ locations: [] });
       }
       const locationIds = linkRows.map(row => row.Clientlocationid);
-      // Get only those locations, join with client info, EXCLUDING soft-deleted
+      // Get only those locations, join with client info, EXCLUDING soft-deleted AND inactive clients
       const [locations] = await db.query(
         `SELECT cl.*, c.Name as clientname
          FROM Clientlocations cl
          LEFT JOIN Clients c ON cl.clientid = c.id
-         WHERE cl.ID IN (${locationIds.map(() => '?').join(',')}) AND cl.Deletedat IS NULL`,
+         WHERE cl.ID IN (${locationIds.map(() => '?').join(',')}) AND cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)`,
         locationIds
       );
       // Flat list of locations
@@ -1224,7 +1334,9 @@ exports.getAllClientLocations = async (req, res) => {
       LEFT JOIN Usertypes ut ON au.Usertypeid = ut.ID
       LEFT JOIN Userclients uc ON uc.userid = u.id
       LEFT JOIN Clientlocations cl ON cl.clientid = uc.clientid
-      WHERE ut.Name = 'Client - Standard User' AND cl.id IS NOT NULL AND p.Emailaddress IS NOT NULL
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      WHERE ut.Name = 'Client - Standard User' AND cl.id IS NOT NULL AND p.Emailaddress IS NOT NULL 
+        AND cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
       ORDER BY p.Emailaddress, cl.locationaddress
     `);
 
@@ -1318,7 +1430,7 @@ exports.getAvailableClientShifts = async (req, res) => {
     // Admin/staff requested all shifts, no date filter
     dateFilterSql = '1=1';
     dateFilterParams = [];
-    // Get all non-deleted shifts
+    // Get all non-deleted shifts from active clients only
     const [rows] = await db.query(
       `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
              csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
@@ -1327,7 +1439,7 @@ exports.getAvailableClientShifts = async (req, res) => {
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
       LEFT JOIN Clients c ON cl.clientid = c.id
       LEFT JOIN Users u ON csr.Createdbyid = u.id
-      WHERE csr.deletedat IS NULL
+      WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
       ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
@@ -1391,13 +1503,16 @@ exports.getAvailableClientShifts = async (req, res) => {
     // The database might store dates in different formats, so we use DATE() function
     dateFilterSql = 'DATE(csr.Shiftdate) = ?';
     dateFilterParams = [dateParam];
-    // Get total count
+    // Get total count from active clients only
     const [countResult] = await db.query(
-      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr WHERE csr.deletedat IS NULL AND ${dateFilterSql}`,
+      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr 
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+       LEFT JOIN Clients c ON cl.clientid = c.id
+       WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}`,
       dateFilterParams
     );
     total = countResult[0]?.total || 0;
-    // Admin/Staff: See all shifts for all hospitals/locations
+    // Admin/Staff: See all shifts for all hospitals/locations from active clients only
     [rows] = await db.query(
       `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
              csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
@@ -1406,7 +1521,7 @@ exports.getAvailableClientShifts = async (req, res) => {
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
       LEFT JOIN Clients c ON cl.clientid = c.id
       LEFT JOIN Users u ON csr.Createdbyid = u.id
-      WHERE csr.deletedat IS NULL AND ${dateFilterSql}
+      WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}
       ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
       LIMIT ? OFFSET ?
     `, [...dateFilterParams, limit, offset]);
@@ -1490,7 +1605,7 @@ exports.getAvailableClientShifts = async (req, res) => {
     
     // Different logic based on user type
     if (userType === 'Employee - Standard User') {
-      // Employee: Only show shifts they are qualified for
+      // Employee: Only show shifts they are qualified for with slot-based logic
       const userId = req.user?.id;
       
       // Get employee's qualifications
@@ -1529,26 +1644,76 @@ exports.getAvailableClientShifts = async (req, res) => {
       
       const qualGroupIds = qualGroupRows.map(q => q.Qualificationgroupid);
       
-      // Get shifts that match employee's qualifications
+      // SLOT-BASED LOGIC: Get shifts with available slots and employee assignment status
       [rows] = await db.query(
-        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+        `SELECT DISTINCT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
                csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
-               u.fullname AS creatorName
+               u.fullname AS creatorName,
+               -- Check if employee has any slot for this shift
+               (SELECT COUNT(*) FROM Clientstaffshifts css_check 
+                WHERE css_check.Clientshiftrequestid = csr.id 
+                AND css_check.Assignedtouserid = ? 
+                AND css_check.Deletedat IS NULL) as employee_has_slot,
+               -- Get employee's slot status if exists
+               (SELECT css_status.Status FROM Clientstaffshifts css_status 
+                WHERE css_status.Clientshiftrequestid = csr.id 
+                AND css_status.Assignedtouserid = ? 
+                AND css_status.Deletedat IS NULL 
+                LIMIT 1) as employee_slot_status,
+               -- Get employee's slot ID if exists (using uppercase ID)
+               (SELECT css_id.ID FROM Clientstaffshifts css_id 
+                WHERE css_id.Clientshiftrequestid = csr.id 
+                AND css_id.Assignedtouserid = ? 
+                AND css_id.Deletedat IS NULL 
+                LIMIT 1) as employee_slot_id,
+               -- Count available open slots (truly available - open and unassigned)
+               (SELECT COUNT(*) FROM Clientstaffshifts css_open 
+                WHERE css_open.Clientshiftrequestid = csr.id 
+                AND css_open.Status = 'open' 
+                AND css_open.Assignedtouserid IS NULL
+                AND css_open.Deletedat IS NULL) as available_slots
         FROM Clientshiftrequests csr
         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
         LEFT JOIN Clients c ON cl.clientid = c.id
         LEFT JOIN Users u ON csr.Createdbyid = u.id
-        WHERE csr.deletedat IS NULL AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})
+        WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+        AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})
+        -- For Available Shifts: only show shifts where employee has NO slot AND there are available open slots
+        AND (SELECT COUNT(*) FROM Clientstaffshifts css_check 
+              WHERE css_check.Clientshiftrequestid = csr.id 
+              AND css_check.Assignedtouserid = ? 
+              AND css_check.Deletedat IS NULL) = 0
+        AND (SELECT COUNT(*) FROM Clientstaffshifts css_open 
+              WHERE css_open.Clientshiftrequestid = csr.id 
+              AND css_open.Status = 'open' 
+              AND css_open.Assignedtouserid IS NULL
+              AND css_open.Deletedat IS NULL) > 0
         ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
         LIMIT ? OFFSET ?
-      `, [...dateFilterParams, ...qualGroupIds, limit, offset]);
+      `, [userId, userId, userId, ...dateFilterParams, ...qualGroupIds, userId, limit, offset]);
       
-      // Get total count for qualified shifts
+      // Get total count for qualified shifts with slot availability
       const [qualifiedCountResult] = await db.query(
         `SELECT COUNT(DISTINCT csr.id) as total 
          FROM Clientshiftrequests csr 
-         WHERE csr.deletedat IS NULL AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})`,
-        [...dateFilterParams, ...qualGroupIds]
+         LEFT JOIN Clients c ON csr.id IN (
+           SELECT cs.Clientshiftrequestid FROM Clientstaffshifts cs 
+           LEFT JOIN Clientshiftrequests csr2 ON cs.Clientshiftrequestid = csr2.id
+           LEFT JOIN Clientlocations cl2 ON csr2.Clientlocationid = cl2.id
+           WHERE cl2.clientid = c.id
+         )
+         WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+         AND ${dateFilterSql} AND csr.Qualificationgroupid IN (${qualGroupIds.map(() => '?').join(',')})
+         AND ((SELECT COUNT(*) FROM Clientstaffshifts css_check 
+               WHERE css_check.Clientshiftrequestid = csr.id 
+               AND css_check.Assignedtouserid = ? 
+               AND css_check.Deletedat IS NULL) > 0
+              OR 
+              (SELECT COUNT(*) FROM Clientstaffshifts css_open 
+               WHERE css_open.Clientshiftrequestid = csr.id 
+               AND css_open.Status = 'open' 
+               AND css_open.Deletedat IS NULL) > 0)`,
+        [...dateFilterParams, ...qualGroupIds, userId]
       );
       total = qualifiedCountResult[0]?.total || 0;
       
@@ -1572,15 +1737,29 @@ exports.getAvailableClientShifts = async (req, res) => {
     const shiftIds = rows.map(row => row.shiftrequestid);
     let staffShifts = [];
     if (shiftIds.length) {
-      const [staffRows] = await db.query(
-        `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
-         FROM Clientstaffshifts css
-         LEFT JOIN Users u ON css.Assignedtouserid = u.id
-         WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
-        shiftIds
-      );
-      // Filter out soft-deleted slots in code (defensive)
-      staffShifts = staffRows.filter(s => !s.Deletedat);
+      if (userType === 'Employee - Standard User') {
+        // For employees, get all slots including open ones to ensure we have slot IDs
+        const [staffRows] = await db.query(
+          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+           FROM Clientstaffshifts css
+           LEFT JOIN Users u ON css.Assignedtouserid = u.id
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})
+           AND css.Deletedat IS NULL`,
+          shiftIds
+        );
+        staffShifts = staffRows;
+      } else {
+        // For admin/staff, get all slots as before
+        const [staffRows] = await db.query(
+          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+           FROM Clientstaffshifts css
+           LEFT JOIN Users u ON css.Assignedtouserid = u.id
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})`,
+          shiftIds
+        );
+        // Filter out soft-deleted slots in code (defensive)
+        staffShifts = staffRows.filter(s => !s.Deletedat);
+      }
     }
     
     // Group staff shifts by shiftrequestid
@@ -1610,18 +1789,86 @@ exports.getAvailableClientShifts = async (req, res) => {
     
     // Show all shifts (no date filter)
     const filteredRows = rows.filter(row => !row.Deletedat);
-    // Return raw DB values for date/time fields (no conversion)
-    const formatted = filteredRows
-      .map(row => {
+    
+    // Format response based on user type
+    const formatted = filteredRows.map(row => {
+      const baseShift = {
+        ...row,
+        Shiftdate: row.Shiftdate,
+        Starttime: row.Starttime,
+        Endtime: row.Endtime,
+        qualificationname: qualMap[row.Qualificationgroupid] || []
+      };
+
+      if (userType === 'Employee - Standard User') {
+        // EMPLOYEE SLOT-BASED LOGIC for Available Shifts only
+        console.log('DEBUG: Processing employee shift:', {
+          shiftrequestid: row.shiftrequestid,
+          employee_has_slot: row.employee_has_slot,
+          available_slots: row.available_slots,
+          userType: userType
+        });
+        
+        // Since we filtered out shifts where employee has a slot, 
+        // we only need to handle the case where employee doesn't have a slot but there are available slots
+        if (row.available_slots > 0) {
+          // Employee doesn't have a slot but there are available slots - show one available slot
+          const shiftSlots = staffShiftsByRequest[row.shiftrequestid] || [];
+          const availableSlots = shiftSlots.filter(s => s.Status === 'open' && !s.Assignedtouserid);
+          const firstAvailableSlot = availableSlots[0];
+          
+          // Debug logging to see what's happening
+          console.log('DEBUG SLOT ID ISSUE:', {
+            shiftrequestid: row.shiftrequestid,
+            shiftSlots: shiftSlots.length,
+            availableSlots: availableSlots.length,
+            firstAvailableSlot: firstAvailableSlot ? {
+              ID: firstAvailableSlot.ID,
+              Status: firstAvailableSlot.Status,
+              Assignedtouserid: firstAvailableSlot.Assignedtouserid
+            } : null,
+            slotId: firstAvailableSlot?.ID || null,
+            allSlots: shiftSlots.map(s => ({
+              ID: s.ID,
+              Status: s.Status,
+              Assignedtouserid: s.Assignedtouserid
+            }))
+          });
+          
+          return {
+            ...baseShift,
+            slotStatus: 'available',
+            slotId: firstAvailableSlot?.ID || null, // Use uppercase ID
+            availableSlots: 1, // Always show only 1 slot to employee
+            hasUserSlot: false,
+            canAccept: !!firstAvailableSlot, // Only allow accept if we have a valid slot
+            StaffShifts: firstAvailableSlot ? [{
+              ID: firstAvailableSlot.ID, // Use uppercase ID to match database
+              Status: 'open',
+              Assignedtouserid: null,
+              employee_name: null
+            }] : []
+          };
+        }
+        
+        // Fallback - no slots available or assigned
         return {
-          ...row,
-          Shiftdate: row.Shiftdate,
-          Starttime: row.Starttime,
-          Endtime: row.Endtime,
-          qualificationname: qualMap[row.Qualificationgroupid] || [],
+          ...baseShift,
+          slotStatus: 'unavailable',
+          slotId: null,
+          availableSlots: 0,
+          hasUserSlot: false,
+          canAccept: false,
+          StaffShifts: []
+        };
+      } else {
+        // ADMIN/STAFF - Show all slots as before
+        return {
+          ...baseShift,
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         };
-      });
+      }
+    });
     
     // Return response based on format
     if (responseFormat === 'simple') {
@@ -1672,7 +1919,8 @@ exports.acceptClientStaffShift = async (req, res) => {
     );
     // Fetch updated shift info with client name
     const [updatedShiftRows] = await db.query(`
-      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName
+      SELECT css.*, cl.LocationName, cl.LocationAddress, c.Name as clientname, u.fullname as employeeName, 
+             csr.Shiftdate, csr.Starttime, csr.Endtime
       FROM Clientstaffshifts css
       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.id
       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
@@ -1697,6 +1945,19 @@ exports.acceptClientStaffShift = async (req, res) => {
         const formattedShiftDate = formatDateForEmail(updatedShift.Shiftdate);
         const formattedStartTime = formatDateTimeForEmail(updatedShift.Starttime);
         const formattedEndTime = formatDateTimeForEmail(updatedShift.Endtime);
+        
+        // Log email template data for debugging
+        logger.info('Shift acceptance email data', {
+          clientName: client.clientName,
+          locationName: updatedShift.LocationName,
+          shiftDate: formattedShiftDate,
+          startTime: formattedStartTime,
+          endTime: formattedEndTime,
+          employeeName: updatedShift.employeeName,
+          rawShiftDate: updatedShift.Shiftdate,
+          rawStartTime: updatedShift.Starttime,
+          rawEndTime: updatedShift.Endtime
+        });
         
         const template = mailTemplates.shiftAcceptedClient({
           clientName: client.clientName,
@@ -1891,10 +2152,14 @@ exports.rejectClientStaffShift = async (req, res) => {
 // Returns all clients with their locations (no auth required).
 exports.getClientLocations = async (req, res) => {
   try {
-    // Get all clients
-    const [clients] = await db.query('SELECT * FROM Clients');
-    // Get all locations
-    const [locations] = await db.query('SELECT * FROM Clientlocations');
+    // Get all active clients (exclude inactive and soft-deleted)
+    const [clients] = await db.query('SELECT * FROM Clients WHERE Deletedat IS NULL AND (IsInactive = 0 OR IsInactive IS NULL)');
+    // Get all locations for active clients only
+    const [locations] = await db.query(`
+      SELECT cl.* FROM Clientlocations cl
+      LEFT JOIN Clients c ON cl.clientid = c.id
+      WHERE cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+    `);
     // Map locations to their client
     const clientMap = clients.map(client => {
       return {
@@ -1944,12 +2209,12 @@ exports.getClientUserLocationsByEmail = async (req, res) => {
       return res.status(200).json({ locations: [] });
     }
     const locationIds = linkRows.map(row => row.Clientlocationid);
-    // Get only those locations
+    // Get only those locations from active clients
     const [locations] = await db.query(
       `SELECT cl.*, c.Name as clientname
        FROM Clientlocations cl
        LEFT JOIN Clients c ON cl.clientid = c.id
-       WHERE cl.ID IN (${locationIds.map(() => '?').join(',')})`,
+       WHERE cl.ID IN (${locationIds.map(() => '?').join(',')}) AND cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)`,
       locationIds
     );
     // Attach user info to each location for clarity
@@ -2081,6 +2346,67 @@ exports.updateClientShiftRequest = async (req, res) => {
     params.push(now);
     updates.push('Updatedbyid = ?');
     params.push(userId);
+
+    // Check for duplicate shifts if relevant fields are being updated
+    const isDuplicationFieldUpdated = updateBody.shiftdate !== undefined || 
+                                     updateBody.starttime !== undefined || 
+                                     updateBody.endtime !== undefined || 
+                                     updateBody.qualificationgroupid !== undefined;
+    
+    if (isDuplicationFieldUpdated) {
+      // Prepare values for duplicate check (use new values if provided, otherwise existing values)
+      const checkClientLocationId = shift.Clientlocationid; // Location cannot be changed in update
+      const checkShiftDate = updateBody.shiftdate !== undefined ? normalizeDate(updateBody.shiftdate) : shift.Shiftdate;
+      const checkStartTime = updateBody.starttime !== undefined ? normalizeDateTime(updateBody.starttime) : shift.Starttime;
+      const checkEndTime = updateBody.endtime !== undefined ? normalizeDateTime(updateBody.endtime) : shift.Endtime;
+      const checkQualificationGroupId = updateBody.qualificationgroupid !== undefined ? updateBody.qualificationgroupid : shift.Qualificationgroupid;
+
+      const duplicateCheckSql = `
+        SELECT csr.id, csr.Totalrequiredstaffnumber, cl.LocationName 
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
+        WHERE csr.Clientlocationid = ? 
+          AND csr.Shiftdate = ? 
+          AND csr.Starttime = ? 
+          AND csr.Endtime = ? 
+          AND csr.Qualificationgroupid = ? 
+          AND csr.Deletedat IS NULL
+          AND csr.id != ?
+      `;
+      const [duplicateRows] = await dbConn.query(duplicateCheckSql, [
+        checkClientLocationId, 
+        checkShiftDate, 
+        checkStartTime, 
+        checkEndTime, 
+        checkQualificationGroupId,
+        shiftId
+      ]);
+      
+      if (duplicateRows.length > 0) {
+        const existingShift = duplicateRows[0];
+        logger.info('Duplicate shift update prevented', { 
+          existingShiftId: existingShift.id,
+          currentShiftId: shiftId,
+          locationId: checkClientLocationId,
+          shiftDate: checkShiftDate,
+          startTime: checkStartTime,
+          endTime: checkEndTime,
+          qualificationGroupId: checkQualificationGroupId,
+          userId: userId,
+          userType: userType
+        });
+        return res.status(409).json({ 
+          message: `This update would create a duplicate shift. A shift already exists for the same location, date, time, and qualification. Please modify the existing shift instead.`,
+          existingShift: {
+            id: existingShift.id,
+            locationName: existingShift.LocationName,
+            currentStaffNumber: existingShift.Totalrequiredstaffnumber,
+            suggestedAction: `Consider updating the staff count on shift ID ${existingShift.id} instead of creating a duplicate shift.`
+          }
+        });
+      }
+    }
+
     // Add the shiftId for the WHERE clause
     params.push(shiftId);
     if (!updates.length) {

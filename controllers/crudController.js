@@ -109,6 +109,16 @@ exports.getAll = async (req, res) => {
   if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
+    // Special handling for Clientlocations to filter by client active status
+    if (table === 'Clientlocations') {
+      const [results] = await db.query(`
+        SELECT cl.* FROM Clientlocations cl
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        WHERE cl.Deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+      `);
+      return res.status(200).json(results);
+    }
+
     // Check for Deletedat or deletedat column (case-insensitive)
     const [columns] = await db.query('SHOW COLUMNS FROM ??', [table]);
     const hasDeletedat = columns.some(col => col.Field.toLowerCase() === 'deletedat');
@@ -148,6 +158,14 @@ exports.create = async (req, res) => {
   if (!isValidTable(table)) return res.status(400).json({ message: 'Invalid table name', code: 'INVALID_TABLE' });
 
   try {
+    // Special handling for People table - require proper registration
+    if (table.toLowerCase() === 'people') {
+      return res.status(400).json({ 
+        message: 'Cannot create People records directly. Use /api/register endpoint for user registration.',
+        code: 'USE_REGISTRATION_ENDPOINT'
+      });
+    }
+
     // Special handling for Clientlocations table
     if (table.toLowerCase() === 'clientlocations') {
       return await createClientLocation(req, res);

@@ -2,28 +2,36 @@
 // Email templates for shift notifications
 
 function shiftAcceptedClient({ clientName, locationName, shiftDate, employeeName, startTime, endTime }) {
+  // Add fallback values for null/undefined data
+  const safeClientName = clientName || 'Valued Client';
+  const safeLocationName = locationName || 'Location TBD';
+  const safeShiftDate = shiftDate || 'Date TBD';
+  const safeEmployeeName = employeeName || 'An Employee';
+  const safeStartTime = startTime || 'Time TBD';
+  const safeEndTime = endTime || 'Time TBD';
+  
   return {
-    subject: `Shift Accepted Notification: ${shiftDate}`,
+    subject: `Shift Accepted Notification: ${safeShiftDate}`,
     html: `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
         <h2 style="color: #1976d2; text-align: center;">📩 Shift Accepted</h2>
 
-        <p style="font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
+        <p style="font-size: 16px;">Dear <strong>${safeClientName}</strong>,</p>
 
         <p style="font-size: 15px; line-height: 1.6;">
-          Your shift at <strong>${locationName}</strong> on <strong>${shiftDate}</strong> has been 
-          <span style="color: #388e3c; font-weight: bold;">accepted</span> by <strong>${employeeName}</strong>.
+          Your shift at <strong>${safeLocationName}</strong> on <strong>${safeShiftDate}</strong> has been 
+          <span style="color: #388e3c; font-weight: bold;">accepted</span> by <strong>${safeEmployeeName}</strong>.
         </p>
 
         <div style="background-color: #e3f2fd; border: 1px solid #bbdefb; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
           <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>📍 Location</strong></p>
-          <p style="font-size: 20px; margin: 5px 0 15px;"><strong>${locationName}</strong></p>
+          <p style="font-size: 20px; margin: 5px 0 15px;"><strong>${safeLocationName}</strong></p>
 
           <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>🗓️ Date</strong></p>
-          <p style="font-size: 16px; margin: 5px 0 15px;">${shiftDate}</p>
+          <p style="font-size: 16px; margin: 5px 0 15px;">${safeShiftDate}</p>
 
           <p style="font-size: 18px; margin: 0; color: #1565c0;"><strong>⏰ Time</strong></p>
-          <p style="font-size: 16px; margin: 5px 0;">${startTime} - ${endTime}</p>
+          <p style="font-size: 16px; margin: 5px 0;">${safeStartTime} - ${safeEndTime}</p>
         </div>
 
         <p style="font-size: 15px;">
@@ -33,7 +41,7 @@ function shiftAcceptedClient({ clientName, locationName, shiftDate, employeeName
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -70,7 +78,7 @@ function shiftApprovedEmployee({ employeeName, clientName, locationName, shiftDa
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -109,7 +117,7 @@ function shiftApprovedClient({ clientName, employeeName, locationName, shiftDate
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;"/>
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -146,7 +154,7 @@ function shiftRejectedEmployee({ employeeName, clientName, locationName, shiftDa
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;"/>
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -194,7 +202,7 @@ function shiftNewEmployee({ employeeName, locationName, clientName, shiftDate, s
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;"/>
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -224,7 +232,7 @@ function shiftUpdatedEmployee({ employeeName, clientName, locationName, shiftDat
         <p style="font-size: 15px;">Please review the updated details and attend as scheduled. If you have any questions, contact your supervisor.</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -252,7 +260,7 @@ function shiftRemovedEmployee({ employeeName, clientName, locationName, shiftDat
         <p style="font-size: 15px;">If you have questions, please contact your supervisor or HR representative.</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -425,7 +433,7 @@ function timesheetSubmissionNotification({ employeeName, employeeEmail, weekStar
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -505,7 +513,7 @@ function timesheetSubmissionConfirmation({ employeeName, weekStartDate, weekEndD
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated confirmation from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated confirmation from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -559,14 +567,64 @@ function adminStaffEmail({ subject, message, senderName, senderEmail, recipientN
         </div>
 
         <div style="background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 15px; margin: 20px 0;">
-          <p style="margin: 0; color: #1976d2; font-weight: bold;">📧 This email was sent via GConsole HRM</p>
+          <p style="margin: 0; color: #1976d2; font-weight: bold;">📧 This email was sent via Shiftly</p>
           <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">Sent by ${senderName}</p>
         </div>
 
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
 
         <p style="font-size: 12px; color: #999; text-align: center;">
-          This is an automated message from <strong>GConsole HRM</strong>. Please do not reply to this email.
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  };
+}
+
+function shiftNewClientToAdminStaff({ clientName, clientContactEmail, locationName, shiftDate, startTime, endTime, qualificationNames, totalRequiredStaff }) {
+  return {
+    subject: `New Shift Request Created by Client: ${clientName} - ${shiftDate}`,
+    html: `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 20px; max-width: 600px; margin: auto;">
+        <h2 style="color: #ff6f00; text-align: center;">🆕 New Shift Request from Client</h2>
+
+        <p style="font-size: 16px;">Dear Admin/Staff,</p>
+
+        <p style="font-size: 15px; line-height: 1.6;">
+          A new shift request has been created by client <strong>${clientName}</strong> 
+          (${clientContactEmail}) and requires your attention.
+        </p>
+
+        <div style="background-color: #fff3e0; border: 1px solid #ffb74d; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #ef6c00; margin-top: 0; text-align: center;">📋 Shift Details</h3>
+          
+          <div style="display: grid; gap: 10px;">
+            <p style="margin: 5px 0;"><strong>🏢 Client:</strong> ${clientName}</p>
+            <p style="margin: 5px 0;"><strong>📧 Contact:</strong> ${clientContactEmail}</p>
+            <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${locationName}</p>
+            <p style="margin: 5px 0;"><strong>🗓️ Date:</strong> ${shiftDate}</p>
+            <p style="margin: 5px 0;"><strong>⏰ Time:</strong> ${startTime} - ${endTime}</p>
+            <p style="margin: 5px 0;"><strong>👥 Staff Required:</strong> ${totalRequiredStaff}</p>
+            <p style="margin: 5px 0;"><strong>🎯 Qualifications:</strong> ${qualificationNames.join(', ')}</p>
+          </div>
+        </div>
+
+        <div style="background-color: #e3f2fd; border: 1px solid #bbdefb; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="font-size: 14px; margin: 0; color: #1565c0; text-align: center;">
+            <strong>📢 Action Required</strong><br>
+            This shift request has been automatically processed and qualified employees have been notified. 
+            Please monitor employee applications and approvals through the admin dashboard.
+          </p>
+        </div>
+
+        <p style="font-size: 15px;">
+          You can manage this shift request through the Shiftly admin panel.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;" />
+
+        <p style="font-size: 12px; color: #999; text-align: center;">
+          This is an automated message from <strong>Shiftly</strong>. Please do not reply to this email.
         </p>
       </div>
     `
@@ -585,5 +643,6 @@ module.exports = {
   contactAdminConfirmation,
   timesheetSubmissionNotification,
   timesheetSubmissionConfirmation,
-  adminStaffEmail
+  adminStaffEmail,
+  shiftNewClientToAdminStaff
 };

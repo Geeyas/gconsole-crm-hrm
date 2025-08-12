@@ -124,7 +124,7 @@ function utcToMelbourneForAPI(utcDateTime) {
  * @returns {string|null} - Formatted date for email or null if invalid
  */
 function formatDateForEmail(dateString) {
-  if (!dateString) return null;
+  if (!dateString) return 'Date TBD';
   
   // If it's already a properly formatted date string, return as is
   if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
@@ -139,20 +139,20 @@ function formatDateForEmail(dateString) {
   // Try to parse and format
   try {
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return null;
+    if (isNaN(date.getTime())) return 'Date TBD';
     return date.toISOString().substring(0, 10);
   } catch {
-    return null;
+    return 'Date TBD';
   }
 }
 
 /**
  * Format datetime for email display (handles VARCHAR strings from database)
  * @param {string} dateTimeString - DateTime string from database
- * @returns {string|null} - Formatted datetime for email or null if invalid
+ * @returns {string} - Formatted datetime for email or fallback if invalid
  */
 function formatDateTimeForEmail(dateTimeString) {
-  if (!dateTimeString) return null;
+  if (!dateTimeString) return 'Time TBD';
   
   // If it's already a properly formatted datetime string, return as is
   if (typeof dateTimeString === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTimeString)) {
@@ -172,10 +172,10 @@ function formatDateTimeForEmail(dateTimeString) {
   // Try to parse and format
   try {
     const date = new Date(dateTimeString);
-    if (isNaN(date.getTime())) return null;
+    if (isNaN(date.getTime())) return 'Time TBD';
     return date.toISOString().substring(0, 16).replace('T', ' ');
   } catch {
-    return null;
+    return 'Time TBD';
   }
 }
 

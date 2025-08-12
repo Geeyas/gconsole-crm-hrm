@@ -34,8 +34,8 @@ This document provides a quick reference to all available APIs in the GConsole C
 
 | Endpoint | Method | Description | User Types | Auth Required |
 |----------|--------|-------------|------------|---------------|
-| `/api/clientshiftrequests` | POST | Create new shift request | Client/Staff/Admin | Yes |
-| `/api/clientshiftrequests/:id` | PUT | Update shift request | Creator/Staff/Admin | Yes |
+| `/api/clientshiftrequests` | POST | Create new shift request **🚫 Prevents duplicates** | Client/Staff/Admin | Yes |
+| `/api/clientshiftrequests/:id` | PUT | Update shift request **🚫 Prevents duplicates** | Creator/Staff/Admin | Yes |
 | `/api/clientshiftrequests/:id` | DELETE | Delete shift request | Creator/Staff/Admin | Yes |
 | `/api/available-client-shifts` | GET | Get available shifts | All | Yes |
 | `/api/clientstaffshifts/:id/accept` | POST | Accept a shift | Employee/Staff/Admin | Yes |
@@ -44,6 +44,13 @@ This document provides a quick reference to all available APIs in the GConsole C
 | `/api/clientstaffshifts/:id/assign-employee` | POST | Assign employee to shift | Staff/Client/Admin | Yes |
 | `/api/clientstaffshifts/:id/remove-employee` | POST | Remove employee from shift | Staff/Client/Admin | Yes |
 | `/api/my-shifts` | GET | Get employee's assigned shifts | Employee/Staff/Admin | Yes |
+
+### 🚫 Duplicate Shift Prevention
+The POST and PUT endpoints for shift requests now include **automatic duplicate detection**:
+- **Prevents creation/update** if a shift exists with identical location, date, time, and qualification
+- **Returns HTTP 409** with details about the existing shift and suggested actions
+- **Encourages consolidation** by modifying existing shifts instead of creating duplicates
+- See `DUPLICATE_SHIFT_PREVENTION.md` for complete details
 
 ---
 

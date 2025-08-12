@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-console.log('🔒 Security Audit for GConsole HRM API\n');
+console.log('🔒 Security Audit for Shiftly API\n');
 
 const auditResults = {
   passed: [],
