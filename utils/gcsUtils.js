@@ -60,18 +60,20 @@ function generateGCSFilename(shiftRequestId, originalFilename) {
 }
 
 /**
- * Generate GCS file path with date organization
+ * Generate GCS file path with shift date organization under "Shifts" folder
  * @param {string} filename - Generated filename
+ * @param {Date} shiftDate - Shift start date for folder organization
  * @returns {string} - Full GCS path
  */
-function generateGCSPath(filename) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+function generateGCSPath(filename, shiftDate = null) {
+  // Use shift date if provided, otherwise fall back to current date
+  const date = shiftDate ? new Date(shiftDate) : new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   
-  // Format: 2025/09/27/shift-123_1695808800000_abc123def456.pdf
-  return `${year}/${month}/${day}/${filename}`;
+  // Format: Shifts/2025/09/27/shift-123_1695808800000_abc123def456.pdf
+  return `Shifts/${year}/${month}/${day}/${filename}`;
 }
 
 /**
@@ -80,17 +82,18 @@ function generateGCSPath(filename) {
  * @param {string} originalFilename - Original filename
  * @param {number} shiftRequestId - ID of shift request
  * @param {string} mimeType - File MIME type
+ * @param {Date} shiftDate - Shift start date for folder organization (optional)
  * @returns {Promise<Object>} - Upload result with GCS path and metadata
  */
-async function uploadPDFToGCS(fileBuffer, originalFilename, shiftRequestId, mimeType) {
+async function uploadPDFToGCS(fileBuffer, originalFilename, shiftRequestId, mimeType, shiftDate = null) {
   if (!bucket) {
     throw new Error('GCS not initialized - PDF upload failed');
   }
 
   try {
-    // Generate unique filename and path
+    // Generate unique filename and path (with shift date for organization)
     const filename = generateGCSFilename(shiftRequestId, originalFilename);
-    const gcsPath = generateGCSPath(filename);
+    const gcsPath = generateGCSPath(filename, shiftDate);
     
     // Create GCS file object
     const file = bucket.file(gcsPath);
@@ -101,6 +104,7 @@ async function uploadPDFToGCS(fileBuffer, originalFilename, shiftRequestId, mime
         originalName: originalFilename,
         shiftRequestId: shiftRequestId.toString(),
         uploadedAt: new Date().toISOString(),
+        shiftDate: shiftDate ? shiftDate.toISOString() : null,
         contentType: mimeType
       },
       contentType: mimeType,

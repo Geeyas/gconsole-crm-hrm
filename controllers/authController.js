@@ -1051,8 +1051,10 @@ exports.createClientShiftRequest = async (req, res) => {
           });
         }
 
-        // Upload PDF to Google Cloud Storage
-        const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, clientshiftrequestid, req.file.mimetype);
+        // Upload PDF to Google Cloud Storage (organize by shift date)
+        // Convert string date to Date object for GCS organization
+        const shiftDateObj = new Date(shiftdateForDB);
+        const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, clientshiftrequestid, req.file.mimetype, shiftDateObj);
         
         // Save attachment metadata to database
         const insertAttachmentSql = `INSERT INTO Attachments 
@@ -2806,6 +2808,84 @@ exports.getMyShifts = async (req, res) => {
 };
 // ================== end getMyShifts ==================
 
+// ================== getMyShiftsWithAttachments ==================
+// Returns all shifts assigned to the logged-in user (employee) WITH attachment information
+exports.getMyShiftsWithAttachments = async (req, res) => {
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized: No user ID in token.' });
+  }
+  try {
+    // Only employees, staff, or admin can view their shifts
+    if (
+      userType !== 'Employee - Standard User' &&
+      userType !== 'Staff - Standard User' &&
+      userType !== 'System Admin'
+    ) {
+      return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can view their shifts.' });
+    }
+
+    // Get all client staff shifts assigned to this user with attachment info
+    const [shifts] = await db.query(
+      `SELECT css.*, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name AS clientname, 
+              qg.Name AS qualificationgroupname,
+              a.ID as attachment_id, a.Filename as attachment_filename, a.Filesize as attachment_filesize, a.Createdat as attachment_created
+       FROM Clientstaffshifts css
+       LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.ID
+       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
+       LEFT JOIN Clients c ON cl.clientid = c.ID
+       LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
+       LEFT JOIN Attachments a ON (a.Sourcetype = 'Clientshiftrequest' AND a.Importreference = csr.ID AND a.Deletedat IS NULL)
+       WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL
+       ORDER BY csr.Shiftdate ASC, csr.Starttime ASC`,
+      [userId]
+    );
+
+    // Format the response with attachment information
+    const formatted = shifts.map(s => {
+      const shift = {
+        ...s,
+        Shiftdate: s.Shiftdate,
+        Starttime: s.Starttime,
+        Endtime: s.Endtime
+      };
+
+      // Add attachment information
+      if (s.attachment_id) {
+        shift.attachment = {
+          id: s.attachment_id,
+          fileName: s.attachment_filename,
+          fileSize: s.attachment_filesize,
+          uploadedAt: s.attachment_created,
+          hasAttachment: true
+        };
+      } else {
+        shift.attachment = null;
+        shift.hasAttachment = false;
+      }
+
+      // Remove the raw attachment fields from the response
+      delete shift.attachment_id;
+      delete shift.attachment_filename;
+      delete shift.attachment_filesize;
+      delete shift.attachment_created;
+
+      return shift;
+    });
+
+    return res.status(200).json({ 
+      myShifts: formatted,
+      totalShifts: formatted.length,
+      shiftsWithAttachments: formatted.filter(s => s.hasAttachment !== false).length
+    });
+  } catch (err) {
+    logger.error('Get my shifts with attachments error', { error: err });
+    return res.status(500).json({ message: 'Failed to fetch shifts with attachments.', error: err.message });
+  }
+};
+// ================== end getMyShiftsWithAttachments ==================
+
 // ================== assignEmployeeToStaffShift ==================
 // Assign an employee to a staff shift slot by email ( admin/staff/client only)
 exports.assignEmployeeToStaffShift = async (req, res) => {
@@ -3263,16 +3343,16 @@ exports.getShiftRequestAttachment = async (req, res) => {
       });
     }
 
-    // Download file from Google Cloud Storage and stream to response
+    // Download file from Google Cloud Storage and send to response
     try {
-      const fileStream = await downloadPDFFromGCS(attachment.Filestoreid);
+      const fileBuffer = await downloadPDFFromGCS(attachment.Filestoreid);
       
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="${attachment.Filename}"`);
       
-      // Stream the file
-      fileStream.pipe(res);
+      // Send the buffer directly
+      res.send(fileBuffer);
       
       logger.info('PDF attachment served successfully', {
         shiftRequestId,
@@ -3381,9 +3461,9 @@ exports.updateShiftRequestAttachment = async (req, res) => {
   }
 
   try {
-    // Check if shift request exists and get creator info
+    // Check if shift request exists and get creator info and shift date
     const [shiftRows] = await db.query(
-      'SELECT Createdbyid FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      'SELECT Createdbyid, Shiftdate FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
       [shiftRequestId]
     );
 
@@ -3392,6 +3472,7 @@ exports.updateShiftRequestAttachment = async (req, res) => {
     }
 
     const shiftCreatedbyid = shiftRows[0].Createdbyid;
+    const shiftDate = shiftRows[0].Shiftdate;
 
     // Check permissions (only creator, staff, or admin can replace)
     if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && userId !== shiftCreatedbyid) {
@@ -3416,8 +3497,10 @@ exports.updateShiftRequestAttachment = async (req, res) => {
       [shiftRequestId.toString()]
     );
 
-    // Upload new PDF to GCS
-    const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, shiftRequestId, req.file.mimetype);
+    // Upload new PDF to GCS (organize by shift date)
+    // Convert string date from database to Date object
+    const shiftDateObj = new Date(shiftDate);
+    const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, shiftRequestId, req.file.mimetype, shiftDateObj);
 
     const now = new Date();
 

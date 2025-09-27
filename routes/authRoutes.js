@@ -194,6 +194,9 @@ router.delete('/People/:id', authenticate, authController.softDeletePerson);
 // Route to get shifts for the logged-in employee
 router.get('/my-shifts', authenticate, authController.getMyShifts);
 
+// Route to get shifts for the logged-in employee WITH attachment information
+router.get('/my-shifts-with-attachments', authenticate, authController.getMyShiftsWithAttachments);
+
 // Route to get qualifications for the logged-in employee
 router.get('/my-qualifications', authenticate, authController.getMyQualifications);
 
