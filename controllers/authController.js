@@ -340,6 +340,13 @@ const {
   formatDateForEmail,
   formatDateTimeForEmail
 } = require('../utils/timezoneUtils');
+const { 
+  uploadPDFToGCS, 
+  downloadPDFFromGCS, 
+  deletePDFFromGCS, 
+  validatePDFFile,
+  gcsInitialized 
+} = require('../utils/gcsUtils');
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -1031,6 +1038,78 @@ exports.createClientShiftRequest = async (req, res) => {
       }
     }
 
+    // ================== Handle PDF attachment if provided ==================
+    let attachmentInfo = null;
+    if (req.file) {
+      try {
+        // Validate PDF file
+        const validationResult = await validatePDFFile(req.file);
+        if (!validationResult.isValid) {
+          return res.status(400).json({ 
+            message: 'Invalid PDF file', 
+            error: validationResult.error 
+          });
+        }
+
+        // Upload PDF to Google Cloud Storage
+        const uploadResult = await uploadPDFToGCS(req.file, 'shift-requests');
+        
+        if (uploadResult.success) {
+          // Save attachment metadata to database
+          const insertAttachmentSql = `INSERT INTO Attachments 
+            (EntityType, EntityID, FileName, FilePath, FileSize, MimeType, Createdat, Createdbyid, Updatedat, Updatedbyid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+          
+          const attachmentParams = [
+            'Clientshiftrequest',
+            clientshiftrequestid,
+            uploadResult.originalName,
+            uploadResult.filePath,
+            req.file.size,
+            req.file.mimetype,
+            now,
+            createdbyid,
+            now,
+            updatedbyid
+          ];
+
+          const [attachmentResult] = await dbConn.query(insertAttachmentSql, attachmentParams);
+          
+          attachmentInfo = {
+            id: attachmentResult.insertId,
+            fileName: uploadResult.originalName,
+            fileSize: req.file.size,
+            uploadedAt: now
+          };
+
+          logger.info('PDF attachment uploaded successfully', {
+            shiftRequestId: clientshiftrequestid,
+            attachmentId: attachmentResult.insertId,
+            fileName: uploadResult.originalName,
+            gcsPath: uploadResult.filePath
+          });
+        } else {
+          logger.error('Failed to upload PDF to GCS', { 
+            error: uploadResult.error,
+            shiftRequestId: clientshiftrequestid 
+          });
+          return res.status(500).json({ 
+            message: 'Failed to upload PDF attachment', 
+            error: uploadResult.error 
+          });
+        }
+      } catch (pdfError) {
+        logger.error('PDF attachment processing error', { 
+          error: pdfError,
+          shiftRequestId: clientshiftrequestid 
+        });
+        return res.status(500).json({ 
+          message: 'Failed to process PDF attachment', 
+          error: pdfError.message 
+        });
+      }
+    }
+
     // Return the created shift request and staff shifts
     const fetchShiftSql = 'SELECT csr.*, c.Name as clientname, cl.LocationName FROM Clientshiftrequests csr LEFT JOIN Clients c ON csr.Clientid = c.ID LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID WHERE csr.ID = ?';
     const [createdShift] = await dbConn.query(fetchShiftSql, [clientshiftrequestid]);
@@ -1171,14 +1250,21 @@ exports.createClientShiftRequest = async (req, res) => {
     }
 
     // Respond only after notifications
-    res.status(201).json({
+    const responseData = {
       message: 'Shift request created successfully',
       shift: {
         ...createdShift[0],
         qualificationname, // keep variable name for frontend
         StaffShifts: createdStaffShifts
       }
-    });
+    };
+
+    // Include attachment info if PDF was uploaded
+    if (attachmentInfo) {
+      responseData.shift.attachment = attachmentInfo;
+    }
+
+    res.status(201).json(responseData);
   } catch (err) {
     logger.error('Create shift request error', { error: err, sql: err.sql || undefined });
     res.status(500).json({ message: 'Failed to create shift request.', error: err.message, sql: err.sql || undefined });
@@ -3128,3 +3214,387 @@ exports.getMyQualifications = async (req, res) => {
   }
 };
 // ================== end getMyQualifications ==================
+
+// ================== PDF Attachment Management Methods ==================
+
+// ================== getShiftRequestAttachment ==================
+// Download/view PDF attachment for a shift request
+// Only assigned employees, shift creator, or staff/admin can access
+exports.getShiftRequestAttachment = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  try {
+    // Check if attachment exists for this shift request
+    const [attachmentRows] = await db.query(
+      `SELECT * FROM Attachments 
+       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
+      [shiftRequestId]
+    );
+
+    if (!attachmentRows.length) {
+      return res.status(404).json({ message: 'No attachment found for this shift request.' });
+    }
+
+    const attachment = attachmentRows[0];
+
+    // Check access permissions
+    let hasAccess = false;
+
+    // System Admin or Staff always have access
+    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      hasAccess = true;
+    } else {
+      // Check if user is the shift creator
+      const [shiftRows] = await db.query(
+        'SELECT Createdbyid FROM Clientshiftrequests WHERE ID = ?',
+        [shiftRequestId]
+      );
+
+      if (shiftRows.length && shiftRows[0].Createdbyid === userId) {
+        hasAccess = true;
+      } else {
+        // Check if user is assigned to any staff shift for this request
+        const [staffShiftRows] = await db.query(
+          `SELECT 1 FROM Clientstaffshifts 
+           WHERE Clientshiftrequestid = ? AND Userid = ? AND Deletedat IS NULL`,
+          [shiftRequestId, userId]
+        );
+
+        if (staffShiftRows.length > 0) {
+          hasAccess = true;
+        }
+      }
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        message: 'Access denied: You can only view attachments for shifts you are assigned to or created.' 
+      });
+    }
+
+    // Download file from Google Cloud Storage and stream to response
+    try {
+      const fileStream = await downloadPDFFromGCS(attachment.FilePath);
+      
+      // Set response headers
+      res.setHeader('Content-Type', attachment.MimeType || 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.FileName}"`);
+      
+      // Stream the file
+      fileStream.pipe(res);
+      
+      logger.info('PDF attachment served successfully', {
+        shiftRequestId,
+        userId,
+        attachmentId: attachment.ID,
+        fileName: attachment.FileName
+      });
+    } catch (downloadError) {
+      logger.error('Failed to download PDF from GCS', { 
+        error: downloadError,
+        filePath: attachment.FilePath,
+        shiftRequestId 
+      });
+      return res.status(500).json({ 
+        message: 'Failed to retrieve attachment file', 
+        error: downloadError.message 
+      });
+    }
+
+  } catch (err) {
+    logger.error('Get shift request attachment error', { error: err });
+    res.status(500).json({ message: 'Failed to retrieve attachment.', error: err.message });
+  }
+};
+// ================== end getShiftRequestAttachment ==================
+
+// ================== getShiftRequestAttachmentInfo ==================
+// Get attachment metadata (info only, not the file)
+exports.getShiftRequestAttachmentInfo = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  try {
+    // Check if attachment exists
+    const [attachmentRows] = await db.query(
+      `SELECT ID, FileName, FileSize, MimeType, Createdat 
+       FROM Attachments 
+       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
+      [shiftRequestId]
+    );
+
+    if (!attachmentRows.length) {
+      return res.status(404).json({ message: 'No attachment found for this shift request.' });
+    }
+
+    // Same access control as file viewing
+    let hasAccess = false;
+    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      hasAccess = true;
+    } else {
+      const [shiftRows] = await db.query(
+        'SELECT Createdbyid FROM Clientshiftrequests WHERE ID = ?',
+        [shiftRequestId]
+      );
+
+      if (shiftRows.length && shiftRows[0].Createdbyid === userId) {
+        hasAccess = true;
+      } else {
+        const [staffShiftRows] = await db.query(
+          `SELECT 1 FROM Clientstaffshifts 
+           WHERE Clientshiftrequestid = ? AND Userid = ? AND Deletedat IS NULL`,
+          [shiftRequestId, userId]
+        );
+        if (staffShiftRows.length > 0) {
+          hasAccess = true;
+        }
+      }
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        message: 'Access denied: You can only view attachment info for shifts you are assigned to or created.' 
+      });
+    }
+
+    const attachment = attachmentRows[0];
+    res.status(200).json({
+      message: 'Attachment info retrieved successfully',
+      attachment: {
+        id: attachment.ID,
+        fileName: attachment.FileName,
+        fileSize: attachment.FileSize,
+        mimeType: attachment.MimeType,
+        uploadedAt: attachment.Createdat
+      }
+    });
+
+  } catch (err) {
+    logger.error('Get shift request attachment info error', { error: err });
+    res.status(500).json({ message: 'Failed to retrieve attachment info.', error: err.message });
+  }
+};
+// ================== end getShiftRequestAttachmentInfo ==================
+
+// ================== updateShiftRequestAttachment ==================
+// Replace PDF attachment for a shift request
+// Only shift creator, or staff/admin can replace
+exports.updateShiftRequestAttachment = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'No PDF file provided.' });
+  }
+
+  try {
+    // Check if shift request exists and get creator info
+    const [shiftRows] = await db.query(
+      'SELECT Createdbyid FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    const shiftCreatedbyid = shiftRows[0].Createdbyid;
+
+    // Check permissions (only creator, staff, or admin can replace)
+    if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && userId !== shiftCreatedbyid) {
+      return res.status(403).json({ 
+        message: 'Access denied: Only the shift creator, staff, or admin can replace attachments.' 
+      });
+    }
+
+    // Validate PDF file
+    const validationResult = await validatePDFFile(req.file);
+    if (!validationResult.isValid) {
+      return res.status(400).json({ 
+        message: 'Invalid PDF file', 
+        error: validationResult.error 
+      });
+    }
+
+    // Check if attachment exists
+    const [existingAttachments] = await db.query(
+      `SELECT * FROM Attachments 
+       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
+      [shiftRequestId]
+    );
+
+    // Upload new PDF to GCS
+    const uploadResult = await uploadPDFToGCS(req.file, 'shift-requests');
+    if (!uploadResult.success) {
+      return res.status(500).json({ 
+        message: 'Failed to upload PDF attachment', 
+        error: uploadResult.error 
+      });
+    }
+
+    const now = new Date();
+
+    if (existingAttachments.length > 0) {
+      // Replace existing attachment
+      const existingAttachment = existingAttachments[0];
+      
+      // Delete old file from GCS
+      try {
+        await deletePDFFromGCS(existingAttachment.FilePath);
+        logger.info('Old PDF deleted from GCS', { 
+          filePath: existingAttachment.FilePath,
+          shiftRequestId 
+        });
+      } catch (deleteError) {
+        logger.error('Failed to delete old PDF from GCS', { 
+          error: deleteError,
+          filePath: existingAttachment.FilePath 
+        });
+        // Continue anyway - we don't want to fail the update because of cleanup issues
+      }
+
+      // Update attachment record
+      await db.query(
+        `UPDATE Attachments 
+         SET FileName = ?, FilePath = ?, FileSize = ?, MimeType = ?, Updatedat = ?, Updatedbyid = ?
+         WHERE ID = ?`,
+        [uploadResult.originalName, uploadResult.filePath, req.file.size, req.file.mimetype, now, userId, existingAttachment.ID]
+      );
+
+      res.status(200).json({
+        message: 'Attachment updated successfully',
+        attachment: {
+          id: existingAttachment.ID,
+          fileName: uploadResult.originalName,
+          fileSize: req.file.size,
+          updatedAt: now
+        }
+      });
+    } else {
+      // Create new attachment
+      const [result] = await db.query(
+        `INSERT INTO Attachments 
+         (EntityType, EntityID, FileName, FilePath, FileSize, MimeType, Createdat, Createdbyid, Updatedat, Updatedbyid)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['Clientshiftrequest', shiftRequestId, uploadResult.originalName, uploadResult.filePath, 
+         req.file.size, req.file.mimetype, now, userId, now, userId]
+      );
+
+      res.status(201).json({
+        message: 'Attachment added successfully',
+        attachment: {
+          id: result.insertId,
+          fileName: uploadResult.originalName,
+          fileSize: req.file.size,
+          uploadedAt: now
+        }
+      });
+    }
+
+    logger.info('PDF attachment updated successfully', {
+      shiftRequestId,
+      userId,
+      fileName: uploadResult.originalName,
+      gcsPath: uploadResult.filePath
+    });
+
+  } catch (err) {
+    logger.error('Update shift request attachment error', { error: err });
+    res.status(500).json({ message: 'Failed to update attachment.', error: err.message });
+  }
+};
+// ================== end updateShiftRequestAttachment ==================
+
+// ================== deleteShiftRequestAttachment ==================
+// Delete PDF attachment for a shift request
+// Only shift creator, or staff/admin can delete
+exports.deleteShiftRequestAttachment = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  try {
+    // Check if shift request exists and get creator info
+    const [shiftRows] = await db.query(
+      'SELECT Createdbyid FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    const shiftCreatedbyid = shiftRows[0].Createdbyid;
+
+    // Check permissions (only creator, staff, or admin can delete)
+    if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && userId !== shiftCreatedbyid) {
+      return res.status(403).json({ 
+        message: 'Access denied: Only the shift creator, staff, or admin can delete attachments.' 
+      });
+    }
+
+    // Check if attachment exists
+    const [attachmentRows] = await db.query(
+      `SELECT * FROM Attachments 
+       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
+      [shiftRequestId]
+    );
+
+    if (!attachmentRows.length) {
+      return res.status(404).json({ message: 'No attachment found for this shift request.' });
+    }
+
+    const attachment = attachmentRows[0];
+
+    // Soft delete the attachment record
+    const now = new Date();
+    await db.query(
+      'UPDATE Attachments SET Deletedat = ?, Deletedbyid = ? WHERE ID = ?',
+      [now, userId, attachment.ID]
+    );
+
+    // Delete file from GCS
+    try {
+      await deletePDFFromGCS(attachment.FilePath);
+      logger.info('PDF deleted from GCS successfully', { 
+        filePath: attachment.FilePath,
+        shiftRequestId,
+        attachmentId: attachment.ID 
+      });
+    } catch (deleteError) {
+      logger.error('Failed to delete PDF from GCS', { 
+        error: deleteError,
+        filePath: attachment.FilePath 
+      });
+      // We've already soft-deleted the DB record, so we'll return success
+      // but log the GCS deletion failure for cleanup later
+    }
+
+    res.status(200).json({
+      message: 'Attachment deleted successfully',
+      deletedAttachment: {
+        id: attachment.ID,
+        fileName: attachment.FileName,
+        deletedAt: now
+      }
+    });
+
+    logger.info('PDF attachment deleted successfully', {
+      shiftRequestId,
+      userId,
+      attachmentId: attachment.ID,
+      fileName: attachment.FileName
+    });
+
+  } catch (err) {
+    logger.error('Delete shift request attachment error', { error: err });
+    res.status(500).json({ message: 'Failed to delete attachment.', error: err.message });
+  }
+};
+// ================== end deleteShiftRequestAttachment ==================
+
+// ================== End PDF Attachment Management Methods ==================

@@ -8,13 +8,14 @@
 5. [Error Handling](#error-handling)
 6. [Authentication APIs](#authentication-apis)
 7. [Client Management APIs](#client-management-apis)
-8. [Timesheet Management APIs](#timesheet-management-apis)
-9. [CRUD Operations APIs](#crud-operations-apis)
-10. [Admin Management APIs](#admin-management-apis)
-11. [Public APIs](#public-apis)
-12. [Database Schema Reference](#database-schema-reference)
-13. [Middleware Reference](#middleware-reference)
-14. [Security Features](#security-features)
+8. [PDF Attachment Management APIs](#pdf-attachment-management-apis)
+9. [Timesheet Management APIs](#timesheet-management-apis)
+10. [CRUD Operations APIs](#crud-operations-apis)
+11. [Admin Management APIs](#admin-management-apis)
+12. [Public APIs](#public-apis)
+13. [Database Schema Reference](#database-schema-reference)
+14. [Middleware Reference](#middleware-reference)
+15. [Security Features](#security-features)
 
 ---
 
@@ -324,7 +325,9 @@ X-RateLimit-Reset: 1640995200
 **Authentication:** Required (Client/Staff/Admin)
 **Rate Limit:** Standard
 
-**Request Body:**
+**⚠️ Note:** This endpoint now supports PDF attachment uploads via `multipart/form-data`. See [PDF Attachment Management APIs](#pdf-attachment-management-apis) for detailed documentation.
+
+**Request Body (JSON - backward compatible):**
 ```json
 {
   "clientLocationId": 5,
@@ -337,13 +340,26 @@ X-RateLimit-Reset: 1640995200
 }
 ```
 
+**Request Body (multipart/form-data - with PDF attachment):**
+```
+clientlocationid: 5
+shiftdate: 2024-01-20
+starttime: 09:00
+endtime: 17:00
+requiredstaff: 2
+description: Weekend coverage shift
+urgency: Medium
+pdf: [PDF File] (optional)
+```
+
 **Validation Rules:**
 - clientLocationId: Required, valid location ID
 - shiftDate: Required, future date
 - startTime/endTime: Required, valid time format
 - requiredStaff: Required, positive integer
+- pdf: Optional, PDF file max 6MB
 
-**Success Response (201):**
+**Success Response (201) - without PDF:**
 ```json
 {
   "success": true,
@@ -354,6 +370,27 @@ X-RateLimit-Reset: 1640995200
     "clientLocationId": 5,
     "shiftDate": "2024-01-20",
     "status": "Pending"
+  }
+}
+```
+
+**Success Response (201) - with PDF:**
+```json
+{
+  "success": true,
+  "message": "Shift request created successfully",
+  "shiftRequestId": 123,
+  "data": {
+    "id": 123,
+    "clientLocationId": 5,
+    "shiftDate": "2024-01-20",
+    "status": "Pending",
+    "attachment": {
+      "id": 567,
+      "fileName": "requirements.pdf",
+      "fileSize": 1048576,
+      "uploadedAt": "2024-01-20T10:00:00.000Z"
+    }
   }
 }
 ```
@@ -579,6 +616,343 @@ X-RateLimit-Reset: 1640995200
       }
     ]
   }
+}
+```
+
+---
+
+## PDF Attachment Management APIs
+
+### Overview
+The PDF attachment feature allows users to attach PDF files to shift requests with proper access controls. Files are stored in Google Cloud Storage with organized folder structure and metadata stored in the database.
+
+### Access Control Rules
+**Who can upload PDFs:**
+- ✅ Anyone who can create shifts (Client users, Staff, Admin)
+
+**Who can view/download PDFs:**
+- ✅ System Admin (can view any PDF)
+- ✅ Staff users (can view any PDF)
+- ✅ Shift creator (can view their own shift's PDF)
+- ✅ Assigned employees (can view PDFs for shifts they're assigned to)
+- ❌ Other employees (cannot view PDFs for shifts they're not assigned to)
+
+**Who can replace/delete PDFs:**
+- ✅ System Admin
+- ✅ Staff users  
+- ✅ Shift creator (only their own shifts)
+- ❌ Assigned employees (cannot modify attachments)
+
+### Modified Endpoint: Create Shift Request with PDF Upload
+
+**Endpoint:** `POST /clientshiftrequests`
+**Authentication:** Required (Client/Staff/Admin)
+**Rate Limit:** Standard
+**Content-Type:** `multipart/form-data` (when uploading PDF)
+
+**Request Body (multipart/form-data):**
+```
+clientlocationid: 123
+shiftdate: 2024-09-27
+starttime: 2024-09-27T08:00:00.000Z
+endtime: 2024-09-27T16:00:00.000Z
+qualificationgroupid: 5
+totalrequiredstaffnumber: 2
+additionalvalue: Additional info
+pdf: [PDF File] (optional - only if user selects a PDF)
+```
+
+**File Validation Rules:**
+- File type: Must be PDF (application/pdf)
+- File size: Maximum 6MB
+- Required: No (optional attachment)
+
+**Success Response (201) - with PDF:**
+```json
+{
+  "message": "Shift request created successfully",
+  "shift": {
+    "ID": 1234,
+    "Clientid": 10,
+    "Clientlocationid": 123,
+    "Shiftdate": "2024-09-27",
+    "Starttime": "2024-09-27T08:00:00.000Z",
+    "Endtime": "2024-09-27T16:00:00.000Z",
+    "qualificationname": ["Registered Nurse", "First Aid"],
+    "StaffShifts": [...],
+    "attachment": {
+      "id": 567,
+      "fileName": "shift-requirements.pdf",
+      "fileSize": 1048576,
+      "uploadedAt": "2024-09-27T01:30:00.000Z"
+    }
+  }
+}
+```
+
+**Success Response (201) - without PDF:**
+```json
+{
+  "message": "Shift request created successfully",
+  "shift": {
+    "ID": 1234,
+    // ... standard shift data without attachment property
+  }
+}
+```
+
+**Error Responses:**
+- **400:** Invalid PDF file, file size exceeds 6MB, validation errors
+- **403:** Access denied
+- **500:** Google Cloud Storage upload failed
+
+### 1. View/Download PDF Attachment
+
+**Endpoint:** `GET /clientshiftrequests/{shiftId}/attachment`
+**Authentication:** Required
+**Rate Limit:** Standard
+**Response Type:** PDF file stream
+
+**Path Parameters:**
+- `shiftId` (required): ID of the shift request
+
+**Success Response (200):**
+- **Content-Type:** `application/pdf`
+- **Content-Disposition:** `inline; filename="original-filename.pdf"`
+- **Body:** PDF file binary data
+
+**Error Responses:**
+- **403:** Access denied - user not authorized to view this PDF
+- **404:** No attachment found for this shift request
+- **500:** Failed to retrieve file from Google Cloud Storage
+
+**Example Usage:**
+```javascript
+// View PDF in new tab
+window.open(`/clientshiftrequests/${shiftId}/attachment`, '_blank');
+
+// Download PDF programmatically
+fetch(`/clientshiftrequests/${shiftId}/attachment`, {
+  headers: { 'Authorization': `Bearer ${token}` }
+})
+.then(response => response.blob())
+.then(blob => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'shift-attachment.pdf';
+  a.click();
+});
+```
+
+### 2. Get PDF Attachment Metadata
+
+**Endpoint:** `GET /clientshiftrequests/{shiftId}/attachment/info`
+**Authentication:** Required
+**Rate Limit:** Standard
+
+**Path Parameters:**
+- `shiftId` (required): ID of the shift request
+
+**Success Response (200):**
+```json
+{
+  "message": "Attachment info retrieved successfully",
+  "attachment": {
+    "id": 567,
+    "fileName": "shift-requirements.pdf",
+    "fileSize": 1048576,
+    "mimeType": "application/pdf",
+    "uploadedAt": "2024-09-27T01:30:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- **403:** Access denied
+- **404:** No attachment found for this shift request
+
+### 3. Replace PDF Attachment
+
+**Endpoint:** `PUT /clientshiftrequests/{shiftId}/attachment`
+**Authentication:** Required (Creator/Staff/Admin only)
+**Rate Limit:** Standard
+**Content-Type:** `multipart/form-data`
+
+**Path Parameters:**
+- `shiftId` (required): ID of the shift request
+
+**Request Body (multipart/form-data):**
+```
+pdf: [New PDF File] (required)
+```
+
+**Success Response (200) - Existing attachment replaced:**
+```json
+{
+  "message": "Attachment updated successfully",
+  "attachment": {
+    "id": 567,
+    "fileName": "new-requirements.pdf",
+    "fileSize": 2097152,
+    "updatedAt": "2024-09-27T02:00:00.000Z"
+  }
+}
+```
+
+**Success Response (201) - New attachment created:**
+```json
+{
+  "message": "Attachment added successfully",
+  "attachment": {
+    "id": 568,
+    "fileName": "requirements.pdf",
+    "fileSize": 1048576,
+    "uploadedAt": "2024-09-27T02:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- **400:** No PDF file provided, invalid PDF file
+- **403:** Access denied - only creator, staff, or admin can replace
+- **404:** Shift request not found
+- **500:** Failed to upload to Google Cloud Storage
+
+### 4. Delete PDF Attachment
+
+**Endpoint:** `DELETE /clientshiftrequests/{shiftId}/attachment`
+**Authentication:** Required (Creator/Staff/Admin only)
+**Rate Limit:** Standard
+
+**Path Parameters:**
+- `shiftId` (required): ID of the shift request
+
+**Success Response (200):**
+```json
+{
+  "message": "Attachment deleted successfully",
+  "deletedAttachment": {
+    "id": 567,
+    "fileName": "shift-requirements.pdf",
+    "deletedAt": "2024-09-27T03:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- **403:** Access denied - only creator, staff, or admin can delete
+- **404:** Shift request not found or no attachment exists
+- **500:** Database or Google Cloud Storage deletion failed
+
+### PDF File Storage Structure
+
+**Google Cloud Storage Organization:**
+```
+gconsole-hrm-storage/
+└── shift-requests/
+    └── 2024/
+        └── 09/
+            └── 27/
+                ├── shift_1234_1727401800000_requirements.pdf
+                ├── shift_1235_1727401900000_safety_docs.pdf
+                └── ...
+```
+
+**File Naming Convention:** `shift_{shiftRequestId}_{timestamp}_{originalFileName}`
+
+### Database Schema Integration
+
+**Attachments Table Usage:**
+```sql
+INSERT INTO Attachments (
+  EntityType,     -- 'Clientshiftrequest'
+  EntityID,       -- Shift request ID
+  FileName,       -- Original filename
+  FilePath,       -- Google Cloud Storage path
+  FileSize,       -- File size in bytes
+  MimeType,       -- 'application/pdf'
+  Createdat,      -- Upload timestamp
+  Createdbyid,    -- User who uploaded
+  Updatedat,      -- Last update timestamp
+  Updatedbyid,    -- User who last updated
+  Deletedat,      -- Soft delete timestamp (NULL if active)
+  Deletedbyid     -- User who deleted (NULL if active)
+);
+```
+
+### Frontend Integration Examples
+
+**JavaScript File Upload:**
+```javascript
+// Create shift with PDF attachment
+const formData = new FormData();
+formData.append('clientlocationid', '123');
+formData.append('shiftdate', '2024-09-27');
+formData.append('starttime', '2024-09-27T08:00:00.000Z');
+formData.append('endtime', '2024-09-27T16:00:00.000Z');
+formData.append('qualificationgroupid', '5');
+formData.append('totalrequiredstaffnumber', '2');
+formData.append('additionalvalue', 'Additional info');
+
+// Add PDF file if selected
+const pdfFile = document.getElementById('pdfInput').files[0];
+if (pdfFile) {
+  formData.append('pdf', pdfFile);
+}
+
+const response = await fetch('/clientshiftrequests', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    // Don't set Content-Type - browser will set it with boundary
+  },
+  body: formData
+});
+```
+
+**File Validation (Frontend):**
+```javascript
+function validatePDFFile(file) {
+  // Check file type
+  if (file.type !== 'application/pdf') {
+    throw new Error('Please select a PDF file.');
+  }
+  
+  // Check file size (6MB limit)
+  const maxSize = 6 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw new Error('File size must be less than 6MB.');
+  }
+  
+  return true;
+}
+```
+
+### Error Handling Examples
+
+**Common Error Responses:**
+```json
+// File validation error
+{
+  "message": "Invalid PDF file",
+  "error": "File size exceeds 6MB limit"
+}
+
+// Access control error
+{
+  "message": "Access denied: You can only view attachments for shifts you are assigned to or created."
+}
+
+// File not found error
+{
+  "message": "No attachment found for this shift request."
+}
+
+// Google Cloud Storage error
+{
+  "message": "Failed to upload PDF attachment",
+  "error": "Google Cloud Storage unavailable"
 }
 ```
 
@@ -1420,6 +1794,36 @@ X-RateLimit-Reset: 1640995200
 - Updatedat (Timestamp)
 ```
 
+#### Attachments Table
+```sql
+- ID (Primary Key)
+- EntityType (VARCHAR: 'Clientshiftrequest', 'Timesheet', etc.)
+- EntityID (Integer: ID of the related entity)
+- FileName (VARCHAR: Original filename)
+- FilePath (VARCHAR: Google Cloud Storage path)
+- FileSize (Integer: File size in bytes)
+- MimeType (VARCHAR: 'application/pdf', etc.)
+- Createdat (Timestamp)
+- Createdbyid (Foreign Key → Users.ID)
+- Updatedat (Timestamp)
+- Updatedbyid (Foreign Key → Users.ID)
+- Deletedat (Timestamp, NULL)
+- Deletedbyid (Foreign Key → Users.ID, NULL)
+```
+
+**Usage Example for PDF attachments:**
+```sql
+-- PDF attachment for shift request ID 123
+INSERT INTO Attachments (
+  EntityType, EntityID, FileName, FilePath, FileSize, MimeType,
+  Createdat, Createdbyid, Updatedat, Updatedbyid
+) VALUES (
+  'Clientshiftrequest', 123, 'requirements.pdf', 
+  'shift-requests/2024/09/27/shift_123_1727401800000_requirements.pdf',
+  1048576, 'application/pdf', NOW(), 456, NOW(), 456
+);
+```
+
 ---
 
 ## Middleware Reference
@@ -1437,6 +1841,14 @@ X-RateLimit-Reset: 1640995200
 - **createShiftValidation**: Validates shift creation data
 - **timesheetValidation**: Validates timesheet entries
 - **contactAdminValidation**: Validates contact form data
+
+### File Upload Middleware
+- **uploadPDF**: Multer middleware for PDF file uploads
+  - **File Type:** PDF only (application/pdf)
+  - **File Size:** Maximum 6MB
+  - **Storage:** Memory storage for processing before GCS upload
+  - **Error Handling:** Invalid file type, size limit exceeded
+  - **Usage:** `uploadPDF.single('pdf')` for single file upload
 
 ### Rate Limiting Middleware
 - **generalLimiter**: 100 requests per 15 minutes
@@ -1479,6 +1891,24 @@ X-RateLimit-Reset: 1640995200
 - **Resource-level Security:** User-specific data access
 - **Location-based Restrictions:** Client user location filtering
 - **Admin Oversight:** Full administrative access
+
+### File Upload Security
+- **File Type Validation:** Only PDF files accepted (MIME type checking)
+- **File Size Limits:** Maximum 6MB per file to prevent DoS attacks
+- **Secure Storage:** Files stored in private Google Cloud Storage bucket
+- **Access Control:** Multi-layered authorization for file access
+- **File Path Security:** Organized folder structure prevents path traversal
+- **Audit Trail:** Complete logging of all file operations
+- **Automatic Cleanup:** Replaced files are automatically deleted from storage
+- **No Direct URL Access:** All file access goes through API with authorization
+
+### Google Cloud Storage Integration
+- **Authentication:** Application Default Credentials
+- **Private Bucket:** No public read access
+- **Organized Structure:** Date-based folder hierarchy
+- **Unique Naming:** Prevents file name collisions
+- **Error Handling:** Graceful fallback for storage failures
+- **Streaming:** Efficient file delivery without server memory buffering
 
 ---
 

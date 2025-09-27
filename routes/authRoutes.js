@@ -12,6 +12,8 @@ const {
   handleValidationErrors 
 } = require('../middleware/validation');
 const { linkClientUserValidation } = require('../middleware/validationLinkClientUser');
+const { handlePDFUpload } = require('../middleware/pdfUpload'); // Import PDF upload middleware
+
 console.log('authController object in authRoutes immediately after require:', authController);
 console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
 
@@ -60,7 +62,14 @@ router.post('/login', loginValidation, handleValidationErrors, authController.lo
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
 router.post('/register', authenticate, registerValidation, handleValidationErrors, authController.register);
-router.post('/clientshiftrequests', authenticate, authorizeClientOrStaffOrAdmin, createShiftValidation, handleValidationErrors, authController.createClientShiftRequest);
+router.post('/clientshiftrequests', 
+  authenticate, 
+  authorizeClientOrStaffOrAdmin, 
+  handlePDFUpload, // Add PDF upload middleware before validation
+  createShiftValidation, 
+  handleValidationErrors, 
+  authController.createClientShiftRequest
+);
 // Edit a client shift request
 router.put('/clientshiftrequests/:id', authenticate, (req, res, next) => {
   // Only creator or staff/admin can edit; logic enforced in controller
@@ -187,6 +196,24 @@ router.get('/my-shifts', authenticate, authController.getMyShifts);
 
 // Route to get qualifications for the logged-in employee
 router.get('/my-qualifications', authenticate, authController.getMyQualifications);
+
+// ================== PDF Attachment Management Routes ==================
+// View/download PDF attachment for a shift request (only assigned employees can access)
+router.get('/clientshiftrequests/:id/attachment', authenticate, authController.getShiftRequestAttachment);
+
+// Replace PDF attachment for a shift request (only creator or staff/admin)
+router.put('/clientshiftrequests/:id/attachment', 
+  authenticate, 
+  handlePDFUpload, 
+  authController.updateShiftRequestAttachment
+);
+
+// Delete PDF attachment for a shift request (only creator or staff/admin)
+router.delete('/clientshiftrequests/:id/attachment', authenticate, authController.deleteShiftRequestAttachment);
+
+// Get attachment info for a shift request (metadata only)
+router.get('/clientshiftrequests/:id/attachment/info', authenticate, authController.getShiftRequestAttachmentInfo);
+// ================== End PDF Attachment Management Routes ==================
 
 console.log('authController:', authController);
 console.log('authController keys:', Object.keys(authController));

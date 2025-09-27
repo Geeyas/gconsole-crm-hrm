@@ -14,7 +14,9 @@ const requiredEnvVars = [
 const optionalEnvVars = [
   'PORT',
   'NODE_ENV',
-  'JWT_REFRESH_SECRET'
+  'JWT_REFRESH_SECRET',
+  'GCS_PROJECT_ID',
+  'GCS_BUCKET_NAME'
 ];
 
 function validateEnvironment() {
@@ -50,6 +52,13 @@ function validateEnvironment() {
   // Validate SMTP configuration
   if (process.env.SMTP_USER && !process.env.SMTP_USER.includes('@')) {
     warnings.push('SMTP_USER should be a valid email address');
+  }
+
+  // Validate Google Cloud Storage configuration
+  if (process.env.GCS_PROJECT_ID && process.env.GCS_BUCKET_NAME) {
+    console.log('✅ GCS configuration found - PDF attachments will be enabled');
+  } else if (process.env.GCS_PROJECT_ID || process.env.GCS_BUCKET_NAME) {
+    warnings.push('GCS configuration incomplete - both GCS_PROJECT_ID and GCS_BUCKET_NAME are required for PDF attachments');
   }
 
   // Report issues
