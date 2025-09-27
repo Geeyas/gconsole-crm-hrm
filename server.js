@@ -15,7 +15,6 @@ const { requestLogger, errorLogger } = require('./middleware/requestLogger');
 const { aiTrainingLogger } = require('./middleware/aiTrainingLogger');
 const { testConnection } = require('./config/db');
 
-const apiDocs = require('./docs/apiDocs');
 const authRoutes = require('./routes/authRoutes');
 const crudRoutes = require('./routes/crudRoutes');
 const clientRoutes = require('./routes/clientRoutes');
@@ -51,10 +50,19 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 2. High-volume operational APIs (timesheets, shifts, user details)
+// 2.1. Unlimited limiter for timesheet APIs (effectively no limits) - LOAD TESTING OPTIMIZED
+const timesheetUnlimitedLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 50000, // OPTIMIZED: Increased from 10,000 to 50,000 for intensive load testing
+  message: { message: 'Timesheet API limit exceeded (very high limit).' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 2. High-volume operational APIs (timesheets, shifts, user details) - LOAD TESTING OPTIMIZED
 const operationalLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 500, // High limit for frequent operations
+  max: 2500, // OPTIMIZED: Increased from 500 to 2500 for load testing
   message: { message: 'Too many operational requests, try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -69,10 +77,10 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 4. Admin operations - moderate limits
+// 4. Admin operations - LOAD TESTING OPTIMIZED
 const adminLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 300, // Higher than general but lower than operational
+  max: 1500, // OPTIMIZED: Increased from 300 to 1500 for load testing
   message: { message: 'Too many admin requests, try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -95,10 +103,16 @@ const corsOptions = {
     // 'https://hrm.ygit.tech',
     // 'https://rostermatic.netlify.app/',
     'http://localhost:4200',
-    'https://rostermatic-b2ae0.web.app/',
-    'https://rostermatic-b2ae0.web.app',
+    'https://rostermatic-b2ae0.web.app/', //Nurselink UAT link
+    'https://rostermatic-b2ae0.web.app', //Nurselink UAT link
+    'https://nurselink-prod-webapp.web.app', //Nurselink Prod WebAPP Link
+    'https://nurselink-prod-webapp.web.app/', //NurseLink Prod WebApp Link
+
     'https://nurselink.shiftly.net.au/',         // Android mobile app
     'https://nurselink.shiftly.net.au',         // Android mobile app
+    
+    'https://app.shiftly.net.au',         // shiftly Main app
+    'https://app.shiftly.net.au',         // shiftly Main app
     'capacitor://nurselink.shiftly.net.au'      // iOS mobile app
     // 'https://console.firebase.google.com/project/rostermatic-b2ae0/overview',
     // 'https://rostermatic-b2ae0.firebaseapp.com/',
@@ -168,7 +182,8 @@ app.use('/api/reset-password', sensitiveOpsLimiter);
 app.use('/api/contact-admin', sensitiveOpsLimiter);
 
 // Apply operational limiter to high-frequency endpoints
-app.use('/api/timesheets', operationalLimiter);
+// app.use('/api/timesheets', operationalLimiter); // RATE LIMITING DISABLED FOR TIMESHEETS
+app.use('/api/timesheets', timesheetUnlimitedLimiter); // UNLIMITED TIMESHEET ACCESS (10,000 req/min)
 app.use('/api/shifts', operationalLimiter);
 app.use('/api/client-shifts', operationalLimiter);
 app.use('/api/users', operationalLimiter);
@@ -223,8 +238,20 @@ app.post('/debug', (req, res) => {
 // API Docs
 app.get('/api', (req, res) => {
   res.status(200).json({
-    message: 'API Endpoint Documentation',
-    endpoints: apiDocs
+    message: 'GConsole CRM-HRM API Documentation',
+    documentation: {
+      comprehensive: 'See COMPREHENSIVE_API_DOCUMENTATION.md for complete API reference',
+      endpoints: {
+        authentication: '/api/login, /api/logout, /api/register, /api/refresh-token',
+        timesheets: '/api/timesheets/* (14 endpoints)',
+        clients: '/api/available-client-shifts, /api/clientshiftrequests/*',
+        admin: '/api/admin/* (6 endpoints)',
+        crud: '/api/{table} (8 generic endpoints)',
+        public: '/api/contact-admin'
+      }
+    },
+    version: '1.0.0',
+    status: 'active'
   });
 });
 

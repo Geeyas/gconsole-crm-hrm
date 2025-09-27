@@ -30,8 +30,14 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   ssl: { rejectUnauthorized: false },
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  connectionLimit: 100,      // Increased from 10 to 100 for load testing
+  queueLimit: 0,            // No limit on queued connection requests
+  // Remove invalid MySQL2 config options
+  // acquireTimeout: 60000,  // Not supported in MySQL2
+  // timeout: 60000,         // Not supported in MySQL2  
+  // idleTimeout: 600000,    // Not supported in MySQL2
+  // maxReconnects: 3,       // Not supported in MySQL2
+  // reconnectDelay: 2000    // Not supported in MySQL2
 });
 
 /**
@@ -81,11 +87,43 @@ async function getHealthStatus() {
   }
 }
 
+/**
+ * Get connection pool status for monitoring
+ * @returns {Object} - Connection pool statistics
+ */
+function getPoolStatus() {
+  try {
+    return {
+      connectionLimit: pool.config.connectionLimit || 100,
+      acquiringConnections: pool._acquiringConnections?.length || 0,
+      allConnections: pool._allConnections?.length || 0,
+      freeConnections: pool._freeConnections?.length || 0,
+      queuedRequests: pool._connectionQueue?.length || 0,
+      host: pool.config.host || 'unknown',
+      database: pool.config.database || 'unknown',
+      user: pool.config.user || 'unknown'
+    };
+  } catch (error) {
+    return {
+      connectionLimit: 100,
+      acquiringConnections: 'unknown',
+      allConnections: 'unknown', 
+      freeConnections: 'unknown',
+      queuedRequests: 'unknown',
+      host: 'unknown',
+      database: 'unknown',
+      user: 'unknown',
+      error: error.message
+    };
+  }
+}
+
 // Test connection on startup
 testConnection();
 
 module.exports = {
   pool,
   testConnection,
-  getHealthStatus
+  getHealthStatus,
+  getPoolStatus
 };

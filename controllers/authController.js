@@ -1503,28 +1503,79 @@ exports.getAvailableClientShifts = async (req, res) => {
     // The database might store dates in different formats, so we use DATE() function
     dateFilterSql = 'DATE(csr.Shiftdate) = ?';
     dateFilterParams = [dateParam];
-    // Get total count from active clients only
-    const [countResult] = await db.query(
-      `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr 
-       LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-       LEFT JOIN Clients c ON cl.clientid = c.id
-       WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}`,
-      dateFilterParams
-    );
-    total = countResult[0]?.total || 0;
-    // Admin/Staff: See all shifts for all hospitals/locations from active clients only
-    [rows] = await db.query(
-      `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
-             csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
-             u.fullname AS creatorName
-      FROM Clientshiftrequests csr
-      LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
-      LEFT JOIN Clients c ON cl.clientid = c.id
-      LEFT JOIN Users u ON csr.Createdbyid = u.id
-      WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}
-      ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
-      LIMIT ? OFFSET ?
-    `, [...dateFilterParams, limit, offset]);
+    
+    // Different logic based on user type for date-specific requests
+    if (userType === 'Client - Standard User') {
+      // Client - Standard User: Only see shifts for their assigned client locations
+      const userId = req.user?.id;
+      
+      // Get user's linked client locations
+      const [linkRows] = await db.query(
+        'SELECT Clientlocationid FROM Userclients WHERE userid = ? AND Clientlocationid IS NOT NULL', 
+        [userId]
+      );
+      
+      if (!linkRows.length) {
+        // Client user has no linked locations, return empty result
+        return res.status(200).json({ 
+          availableShifts: [], 
+          pagination: { page, limit, total: 0 } 
+        });
+      }
+      
+      const locationIds = linkRows.map(row => row.Clientlocationid);
+      
+      // Get total count for client's accessible locations with date filter
+      const [countResult] = await db.query(
+        `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr 
+         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+         LEFT JOIN Clients c ON cl.clientid = c.id
+         WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) 
+         AND ${dateFilterSql} AND csr.Clientlocationid IN (${locationIds.map(() => '?').join(',')})`,
+        [...dateFilterParams, ...locationIds]
+      );
+      total = countResult[0]?.total || 0;
+      
+      // Client: See shifts for their assigned locations from active clients only
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
+        WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) 
+        AND ${dateFilterSql} AND csr.Clientlocationid IN (${locationIds.map(() => '?').join(',')})
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+        LIMIT ? OFFSET ?
+      `, [...dateFilterParams, ...locationIds, limit, offset]);
+      
+    } else {
+      // Admin/Staff: Get total count from active clients only
+      const [countResult] = await db.query(
+        `SELECT COUNT(DISTINCT csr.id) as total FROM Clientshiftrequests csr 
+         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+         LEFT JOIN Clients c ON cl.clientid = c.id
+         WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}`,
+        dateFilterParams
+      );
+      total = countResult[0]?.total || 0;
+      
+      // Admin/Staff: See all shifts for all hospitals/locations from active clients only
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
+        WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL) AND ${dateFilterSql}
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+        LIMIT ? OFFSET ?
+      `, [...dateFilterParams, limit, offset]);
+    }
     // For each shift request, get its staff shifts and their statuses
     const shiftIds = rows.map(row => row.shiftrequestid);
     let staffShifts = [];
@@ -1717,6 +1768,53 @@ exports.getAvailableClientShifts = async (req, res) => {
       );
       total = qualifiedCountResult[0]?.total || 0;
       
+    } else if (userType === 'Client - Standard User') {
+      // Client - Standard User: Only see shifts for their assigned client locations
+      const userId = req.user?.id;
+      
+      // Get user's linked client locations
+      const [linkRows] = await db.query(
+        'SELECT Clientlocationid FROM Userclients WHERE userid = ? AND Clientlocationid IS NOT NULL', 
+        [userId]
+      );
+      
+      if (!linkRows.length) {
+        // Client user has no linked locations, return empty result
+        return res.status(200).json({ 
+          availableShifts: [], 
+          pagination: { page, limit, total: 0 } 
+        });
+      }
+      
+      const locationIds = linkRows.map(row => row.Clientlocationid);
+      
+      // Get total count for client's accessible locations
+      const [clientCountResult] = await db.query(
+        `SELECT COUNT(DISTINCT csr.id) as total 
+         FROM Clientshiftrequests csr 
+         LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+         LEFT JOIN Clients c ON cl.clientid = c.id
+         WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+         AND ${dateFilterSql} AND csr.Clientlocationid IN (${locationIds.map(() => '?').join(',')})`,
+        [...dateFilterParams, ...locationIds]
+      );
+      total = clientCountResult[0]?.total || 0;
+      
+      // Client: Only see shifts for their assigned locations from active clients
+      [rows] = await db.query(
+        `SELECT csr.id AS shiftrequestid, csr.Clientlocationid, cl.LocationName, cl.LocationAddress, cl.clientid, c.Name AS clientname,
+               csr.Shiftdate, csr.Starttime, csr.Endtime, csr.Qualificationgroupid, csr.Totalrequiredstaffnumber,
+               u.fullname AS creatorName
+        FROM Clientshiftrequests csr
+        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.id
+        LEFT JOIN Clients c ON cl.clientid = c.id
+        LEFT JOIN Users u ON csr.Createdbyid = u.id
+        WHERE csr.deletedat IS NULL AND c.Deletedat IS NULL AND (c.IsInactive = 0 OR c.IsInactive IS NULL)
+        AND ${dateFilterSql} AND csr.Clientlocationid IN (${locationIds.map(() => '?').join(',')})
+        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC
+        LIMIT ? OFFSET ?
+      `, [...dateFilterParams, ...locationIds, limit, offset]);
+      
     } else {
       // Admin/Staff: See all shifts for all hospitals/locations
       [rows] = await db.query(
@@ -1739,6 +1837,17 @@ exports.getAvailableClientShifts = async (req, res) => {
     if (shiftIds.length) {
       if (userType === 'Employee - Standard User') {
         // For employees, get all slots including open ones to ensure we have slot IDs
+        const [staffRows] = await db.query(
+          `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
+           FROM Clientstaffshifts css
+           LEFT JOIN Users u ON css.Assignedtouserid = u.id
+           WHERE css.Clientshiftrequestid IN (${shiftIds.map(() => '?').join(',')})
+           AND css.Deletedat IS NULL`,
+          shiftIds
+        );
+        staffShifts = staffRows;
+      } else if (userType === 'Client - Standard User') {
+        // For clients, get all slots for their accessible shifts
         const [staffRows] = await db.query(
           `SELECT css.*, u.fullname AS employee_name, u.email AS employee_email
            FROM Clientstaffshifts css
@@ -1860,6 +1969,12 @@ exports.getAvailableClientShifts = async (req, res) => {
           hasUserSlot: false,
           canAccept: false,
           StaffShifts: []
+        };
+      } else if (userType === 'Client - Standard User') {
+        // CLIENT - Show all slots for shifts in their assigned locations
+        return {
+          ...baseShift,
+          StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         };
       } else {
         // ADMIN/STAFF - Show all slots as before
