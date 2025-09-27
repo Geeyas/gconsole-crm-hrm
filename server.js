@@ -163,9 +163,68 @@ app.use(aiTrainingLogger);
 // Request logging disabled for cleaner logs. Only important events and errors will be logged manually.
 // app.use(requestLogger);
 
-// Request size limits for security
-app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
-app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Limit URL-encoded payload size
+// Debug middleware to log file upload requests
+app.use((req, res, next) => {
+  if (req.path.includes('clientshiftrequests') || req.path.includes('attachment')) {
+    console.log('\n🔍 PDF Upload Debug:', {
+      method: req.method,
+      path: req.path,
+      rawHeaders: req.rawHeaders.filter((h, i) => i % 2 === 0 && h.toLowerCase().includes('content')).reduce((acc, key, i) => {
+        acc[key] = req.rawHeaders[req.rawHeaders.indexOf(key) + 1];
+        return acc;
+      }, {}),
+      contentType: req.get('content-type'),
+      hasBody: !!req.body,
+      bodyType: typeof req.body,
+      headers: {
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length']
+      }
+    });
+  }
+  next();
+});
+
+// Request size limits for security - EXCLUDING file upload routes
+app.use((req, res, next) => {
+  const contentType = req.get('content-type') || '';
+  
+  // AGGRESSIVE BYPASS: Skip ALL body parsing for multipart data
+  if (contentType && contentType.includes('multipart/form-data')) {
+    console.log('🚫 AGGRESSIVE BYPASS: No body parsing for multipart request:', req.path, contentType);
+    // Set raw flag to prevent any further body parsing attempts
+    req._body = true; // Mark as already processed to prevent double parsing
+    return next();
+  }
+  
+  // ONLY bypass body parsing for pure attachment routes
+  if (req.path.includes('/attachment')) {
+    console.log('⚠️ BYPASSING ALL BODY PARSING for attachment route:', req.path);
+    return next();
+  }
+  
+  // Apply JSON body parsing for all other routes
+  express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  const contentType = req.get('content-type') || '';
+  
+  // AGGRESSIVE BYPASS: Skip ALL body parsing for multipart data
+  if (contentType && contentType.includes('multipart/form-data')) {
+    console.log('🚫 AGGRESSIVE BYPASS: No URL-encoded parsing for multipart request:', req.path, contentType);
+    return next();
+  }
+  
+  // ONLY bypass body parsing for pure attachment routes
+  if (req.path.includes('/attachment')) {
+    console.log('⚠️ BYPASSING URL-encoded parsing for attachment route:', req.path);
+    return next();
+  }
+  
+  // Apply URL-encoded parsing for all other routes
+  express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+});
 
 // Request logging middleware
 app.use(requestLogger);
@@ -254,6 +313,9 @@ app.get('/api', (req, res) => {
     status: 'active'
   });
 });
+
+// Add temporary static file serving for test
+app.use(express.static(__dirname));
 
 // Mount publicRoutes first so /api/contact-admin is always public
 app.use('/api', publicRoutes);

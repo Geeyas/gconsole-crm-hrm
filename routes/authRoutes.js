@@ -201,6 +201,13 @@ router.get('/my-qualifications', authenticate, authController.getMyQualification
 // View/download PDF attachment for a shift request (only assigned employees can access)
 router.get('/clientshiftrequests/:id/attachment', authenticate, authController.getShiftRequestAttachment);
 
+// Create/Add PDF attachment for a shift request (only creator or staff/admin)
+router.post('/clientshiftrequests/:id/attachment', 
+  authenticate, 
+  handlePDFUpload, 
+  authController.updateShiftRequestAttachment
+);
+
 // Replace PDF attachment for a shift request (only creator or staff/admin)
 router.put('/clientshiftrequests/:id/attachment', 
   authenticate, 

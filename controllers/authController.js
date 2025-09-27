@@ -1,3 +1,42 @@
+const { pool: db } = require('../config/db');
+const jwt = require('jsonwebtoken');
+const { hashPassword, verifyPassword, migrateLegacyHash, generateSalt } = require('../utils/hashUtils');
+const winston = require('winston');
+const { sendMail } = require('../mailer/mailer');
+const mailTemplates = require('../mailer/templates');
+const { DateTime } = require('luxon');
+const { 
+  toUTC, 
+  formatForMySQL, 
+  utcToMelbourneForAPI, 
+  formatDate, 
+  formatDateTime,
+  formatDateForEmail,
+  formatDateTimeForEmail
+} = require('../utils/timezoneUtils');
+const { 
+  uploadPDFToGCS, 
+  downloadPDFFromGCS, 
+  deletePDFFromGCS, 
+  validatePDFFile,
+  gcsInitialized 
+} = require('../utils/gcsUtils');
+
+const jwtSecret = process.env.JWT_SECRET;
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
 // ================== removeQualificationFromEmployee ==================
 // Removes a qualification from an employee (person) by deleting from Staffqualifications
 exports.removeQualificationFromEmployee = async (req, res) => {
@@ -324,45 +363,6 @@ exports.linkClientUserToSpecificLocationByEmail = async (req, res) => {
   }
 };
 // ================== end linkClientUserToSpecificLocationByEmail ==================
-const { pool: db } = require('../config/db');
-const jwt = require('jsonwebtoken');
-const { hashPassword, verifyPassword, migrateLegacyHash, generateSalt } = require('../utils/hashUtils');
-const winston = require('winston');
-const { sendMail } = require('../mailer/mailer');
-const mailTemplates = require('../mailer/templates');
-const { DateTime } = require('luxon');
-const { 
-  toUTC, 
-  formatForMySQL, 
-  utcToMelbourneForAPI, 
-  formatDate, 
-  formatDateTime,
-  formatDateForEmail,
-  formatDateTimeForEmail
-} = require('../utils/timezoneUtils');
-const { 
-  uploadPDFToGCS, 
-  downloadPDFFromGCS, 
-  deletePDFFromGCS, 
-  validatePDFFile,
-  gcsInitialized 
-} = require('../utils/gcsUtils');
-
-const jwtSecret = process.env.JWT_SECRET;
-
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(),
-  ],
-});
-
-// Date formatting helpers for shift endpoints
-
 
 // ================== login ==================
 // Authenticates a user and returns a JWT token if credentials are valid.
@@ -1043,8 +1043,8 @@ exports.createClientShiftRequest = async (req, res) => {
     if (req.file) {
       try {
         // Validate PDF file
-        const validationResult = await validatePDFFile(req.file);
-        if (!validationResult.isValid) {
+        const validationResult = validatePDFFile(req.file);
+        if (!validationResult.valid) {
           return res.status(400).json({ 
             message: 'Invalid PDF file', 
             error: validationResult.error 
@@ -1052,52 +1052,41 @@ exports.createClientShiftRequest = async (req, res) => {
         }
 
         // Upload PDF to Google Cloud Storage
-        const uploadResult = await uploadPDFToGCS(req.file, 'shift-requests');
+        const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, clientshiftrequestid, req.file.mimetype);
         
-        if (uploadResult.success) {
-          // Save attachment metadata to database
-          const insertAttachmentSql = `INSERT INTO Attachments 
-            (EntityType, EntityID, FileName, FilePath, FileSize, MimeType, Createdat, Createdbyid, Updatedat, Updatedbyid)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-          
-          const attachmentParams = [
-            'Clientshiftrequest',
-            clientshiftrequestid,
-            uploadResult.originalName,
-            uploadResult.filePath,
-            req.file.size,
-            req.file.mimetype,
-            now,
-            createdbyid,
-            now,
-            updatedbyid
-          ];
+        // Save attachment metadata to database
+        const insertAttachmentSql = `INSERT INTO Attachments 
+          (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        
+        const attachmentParams = [
+          'Clientshiftrequest',
+          clientshiftrequestid.toString(),
+          uploadResult.filename,
+          uploadResult.gcsPath,
+          req.file.size,
+          '.pdf',
+          now,
+          createdbyid,
+          now,
+          updatedbyid
+        ];
 
-          const [attachmentResult] = await dbConn.query(insertAttachmentSql, attachmentParams);
-          
-          attachmentInfo = {
-            id: attachmentResult.insertId,
-            fileName: uploadResult.originalName,
-            fileSize: req.file.size,
-            uploadedAt: now
-          };
+        const [attachmentResult] = await dbConn.query(insertAttachmentSql, attachmentParams);
+        
+        attachmentInfo = {
+          id: attachmentResult.insertId,
+          fileName: uploadResult.filename,
+          fileSize: req.file.size,
+          uploadedAt: now
+        };
 
-          logger.info('PDF attachment uploaded successfully', {
-            shiftRequestId: clientshiftrequestid,
-            attachmentId: attachmentResult.insertId,
-            fileName: uploadResult.originalName,
-            gcsPath: uploadResult.filePath
-          });
-        } else {
-          logger.error('Failed to upload PDF to GCS', { 
-            error: uploadResult.error,
-            shiftRequestId: clientshiftrequestid 
-          });
-          return res.status(500).json({ 
-            message: 'Failed to upload PDF attachment', 
-            error: uploadResult.error 
-          });
-        }
+        logger.info('PDF attachment uploaded successfully', {
+          shiftRequestId: clientshiftrequestid,
+          attachmentId: attachmentResult.insertId,
+          fileName: uploadResult.filename,
+          gcsPath: uploadResult.gcsPath
+        });
       } catch (pdfError) {
         logger.error('PDF attachment processing error', { 
           error: pdfError,
@@ -3229,8 +3218,8 @@ exports.getShiftRequestAttachment = async (req, res) => {
     // Check if attachment exists for this shift request
     const [attachmentRows] = await db.query(
       `SELECT * FROM Attachments 
-       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
-      [shiftRequestId]
+       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
+      [shiftRequestId.toString()]
     );
 
     if (!attachmentRows.length) {
@@ -3276,11 +3265,11 @@ exports.getShiftRequestAttachment = async (req, res) => {
 
     // Download file from Google Cloud Storage and stream to response
     try {
-      const fileStream = await downloadPDFFromGCS(attachment.FilePath);
+      const fileStream = await downloadPDFFromGCS(attachment.Filestoreid);
       
       // Set response headers
-      res.setHeader('Content-Type', attachment.MimeType || 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${attachment.FileName}"`);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.Filename}"`);
       
       // Stream the file
       fileStream.pipe(res);
@@ -3289,12 +3278,12 @@ exports.getShiftRequestAttachment = async (req, res) => {
         shiftRequestId,
         userId,
         attachmentId: attachment.ID,
-        fileName: attachment.FileName
+        fileName: attachment.Filename
       });
     } catch (downloadError) {
       logger.error('Failed to download PDF from GCS', { 
         error: downloadError,
-        filePath: attachment.FilePath,
+        filePath: attachment.Filestoreid,
         shiftRequestId 
       });
       return res.status(500).json({ 
@@ -3320,10 +3309,10 @@ exports.getShiftRequestAttachmentInfo = async (req, res) => {
   try {
     // Check if attachment exists
     const [attachmentRows] = await db.query(
-      `SELECT ID, FileName, FileSize, MimeType, Createdat 
+      `SELECT ID, Filename, Filesize, Createdat 
        FROM Attachments 
-       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
-      [shiftRequestId]
+       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
+      [shiftRequestId.toString()]
     );
 
     if (!attachmentRows.length) {
@@ -3412,8 +3401,8 @@ exports.updateShiftRequestAttachment = async (req, res) => {
     }
 
     // Validate PDF file
-    const validationResult = await validatePDFFile(req.file);
-    if (!validationResult.isValid) {
+    const validationResult = validatePDFFile(req.file);
+    if (!validationResult.valid) {
       return res.status(400).json({ 
         message: 'Invalid PDF file', 
         error: validationResult.error 
@@ -3423,18 +3412,12 @@ exports.updateShiftRequestAttachment = async (req, res) => {
     // Check if attachment exists
     const [existingAttachments] = await db.query(
       `SELECT * FROM Attachments 
-       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
-      [shiftRequestId]
+       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
+      [shiftRequestId.toString()]
     );
 
     // Upload new PDF to GCS
-    const uploadResult = await uploadPDFToGCS(req.file, 'shift-requests');
-    if (!uploadResult.success) {
-      return res.status(500).json({ 
-        message: 'Failed to upload PDF attachment', 
-        error: uploadResult.error 
-      });
-    }
+    const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, shiftRequestId, req.file.mimetype);
 
     const now = new Date();
 
@@ -3444,15 +3427,15 @@ exports.updateShiftRequestAttachment = async (req, res) => {
       
       // Delete old file from GCS
       try {
-        await deletePDFFromGCS(existingAttachment.FilePath);
+        await deletePDFFromGCS(existingAttachment.Filestoreid);
         logger.info('Old PDF deleted from GCS', { 
-          filePath: existingAttachment.FilePath,
+          filePath: existingAttachment.Filestoreid,
           shiftRequestId 
         });
       } catch (deleteError) {
         logger.error('Failed to delete old PDF from GCS', { 
           error: deleteError,
-          filePath: existingAttachment.FilePath 
+          filePath: existingAttachment.Filestoreid 
         });
         // Continue anyway - we don't want to fail the update because of cleanup issues
       }
@@ -3460,16 +3443,16 @@ exports.updateShiftRequestAttachment = async (req, res) => {
       // Update attachment record
       await db.query(
         `UPDATE Attachments 
-         SET FileName = ?, FilePath = ?, FileSize = ?, MimeType = ?, Updatedat = ?, Updatedbyid = ?
+         SET Filename = ?, Filestoreid = ?, Filesize = ?, Updatedat = ?, Updatedbyid = ?
          WHERE ID = ?`,
-        [uploadResult.originalName, uploadResult.filePath, req.file.size, req.file.mimetype, now, userId, existingAttachment.ID]
+        [uploadResult.filename, uploadResult.gcsPath, req.file.size, now, userId, existingAttachment.ID]
       );
 
       res.status(200).json({
         message: 'Attachment updated successfully',
         attachment: {
           id: existingAttachment.ID,
-          fileName: uploadResult.originalName,
+          fileName: uploadResult.filename,
           fileSize: req.file.size,
           updatedAt: now
         }
@@ -3478,17 +3461,17 @@ exports.updateShiftRequestAttachment = async (req, res) => {
       // Create new attachment
       const [result] = await db.query(
         `INSERT INTO Attachments 
-         (EntityType, EntityID, FileName, FilePath, FileSize, MimeType, Createdat, Createdbyid, Updatedat, Updatedbyid)
+         (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ['Clientshiftrequest', shiftRequestId, uploadResult.originalName, uploadResult.filePath, 
-         req.file.size, req.file.mimetype, now, userId, now, userId]
+        ['Clientshiftrequest', shiftRequestId.toString(), uploadResult.filename, uploadResult.gcsPath, 
+         req.file.size, '.pdf', now, userId, now, userId]
       );
 
       res.status(201).json({
         message: 'Attachment added successfully',
         attachment: {
           id: result.insertId,
-          fileName: uploadResult.originalName,
+          fileName: uploadResult.filename,
           fileSize: req.file.size,
           uploadedAt: now
         }
@@ -3540,8 +3523,8 @@ exports.deleteShiftRequestAttachment = async (req, res) => {
     // Check if attachment exists
     const [attachmentRows] = await db.query(
       `SELECT * FROM Attachments 
-       WHERE EntityType = 'Clientshiftrequest' AND EntityID = ? AND Deletedat IS NULL`,
-      [shiftRequestId]
+       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
+      [shiftRequestId.toString()]
     );
 
     if (!attachmentRows.length) {
@@ -3559,16 +3542,16 @@ exports.deleteShiftRequestAttachment = async (req, res) => {
 
     // Delete file from GCS
     try {
-      await deletePDFFromGCS(attachment.FilePath);
+      await deletePDFFromGCS(attachment.Filestoreid);
       logger.info('PDF deleted from GCS successfully', { 
-        filePath: attachment.FilePath,
+        filePath: attachment.Filestoreid,
         shiftRequestId,
         attachmentId: attachment.ID 
       });
     } catch (deleteError) {
       logger.error('Failed to delete PDF from GCS', { 
         error: deleteError,
-        filePath: attachment.FilePath 
+        filePath: attachment.Filestoreid 
       });
       // We've already soft-deleted the DB record, so we'll return success
       // but log the GCS deletion failure for cleanup later
@@ -3578,7 +3561,7 @@ exports.deleteShiftRequestAttachment = async (req, res) => {
       message: 'Attachment deleted successfully',
       deletedAttachment: {
         id: attachment.ID,
-        fileName: attachment.FileName,
+        fileName: attachment.Filename,
         deletedAt: now
       }
     });
@@ -3587,7 +3570,7 @@ exports.deleteShiftRequestAttachment = async (req, res) => {
       shiftRequestId,
       userId,
       attachmentId: attachment.ID,
-      fileName: attachment.FileName
+      fileName: attachment.Filename
     });
 
   } catch (err) {

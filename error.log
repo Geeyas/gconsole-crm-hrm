@@ -1,0 +1,3 @@
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'EntityType' in 'where clause'","sql":"SELECT * FROM Attachments \n       WHERE EntityType = 'Clientshiftrequest' AND EntityID = 190 AND Deletedat IS NULL","sqlMessage":"Unknown column 'EntityType' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Update shift request attachment error","timestamp":"2025-09-27T14:15:06.296Z"}
+{"error":{},"level":"error","message":"PDF attachment processing error","shiftRequestId":192,"timestamp":"2025-09-27T14:16:07.246Z"}
+{"error":{},"level":"error","message":"Update shift request attachment error","timestamp":"2025-09-27T14:29:30.866Z"}
