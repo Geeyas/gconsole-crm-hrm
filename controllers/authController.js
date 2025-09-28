@@ -399,7 +399,6 @@ exports.login = async (req, res, next) => {
     // If password is valid and user has a salt (legacy SHA-256), migrate to bcrypt
     if (user.salt && user.salt.trim() !== '') {
       try {
-        console.log(`Migrating password for user ${user.username} from SHA-256 to bcrypt...`);
         const newHash = await migrateLegacyHash(password, user.passwordhash, user.salt);
         
         // Update the user's password hash and remove the salt
@@ -408,9 +407,9 @@ exports.login = async (req, res, next) => {
           [newHash, user.id, user.id]
         );
         
-        console.log(`Password migration completed for user ${user.username}`);
+        logger.info(`Password migration completed for user ${user.username}`);
       } catch (error) {
-        console.error(`Password migration failed for user ${user.username}:`, error);
+        logger.error(`Password migration failed for user ${user.username}:`, error);
         // Don't fail the login, just log the error
       }
     }
@@ -1217,8 +1216,6 @@ exports.createClientShiftRequest = async (req, res) => {
 
     // Send notification to Admin and Staff users when Client creates a shift
     if (userType === 'Client - Standard User') {
-      logger.info('📧 DEBUG: Client user created shift, sending admin/staff notifications');
-      
       try {
         // Get all Admin and Staff users
         const [adminStaffUsers] = await db.query(`
@@ -1233,16 +1230,12 @@ exports.createClientShiftRequest = async (req, res) => {
             AND u.Deletedat IS NULL
         `);
 
-        logger.info('📧 DEBUG: Found admin/staff users for notification', { count: adminStaffUsers.length });
-
         if (adminStaffUsers && adminStaffUsers.length > 0) {
           const shift = createdShift[0];
           const clientContactEmail = req.user.email || 'Not provided';
           
           // Send notification to each admin/staff user
           await Promise.all(adminStaffUsers.map(async (adminUser) => {
-            logger.info('📧 DEBUG: Sending admin/staff notification', { to: adminUser.email, userType: adminUser.usertype_name });
-            
             const formattedShiftDate = formatDateForEmail(shift.Shiftdate);
             const formattedStartTime = formatDateTimeForEmail(shift.Starttime);
             const formattedEndTime = formatDateTimeForEmail(shift.Endtime);
@@ -1259,13 +1252,12 @@ exports.createClientShiftRequest = async (req, res) => {
             });
 
             try {
-              logger.info('📧 DEBUG: Attempting to send admin/staff email', { to: adminUser.email, subject: template.subject });
               await sendMail({
                 to: adminUser.email,
                 subject: template.subject,
                 html: template.html
               });
-              logger.info('📧 DEBUG: Admin/staff email sent successfully', { to: adminUser.email });
+              logger.info('Admin/staff notification sent', { to: adminUser.email });
             } catch (e) {
               logger.error('Email send error (new shift to admin/staff)', { error: e, email: adminUser.email });
             }
@@ -1509,7 +1501,7 @@ exports.softDeletePerson = async (req, res) => {
         [deleterId, linkedUserId]
       );
       if (userUpdateResult.affectedRows === 0) {
-        console.warn(`[softDeletePerson] WARNING: No rows updated in Users for id=${linkedUserId}`);
+        logger.warn(`No rows updated in Users for id=${linkedUserId}`);
       }
     }
     res.status(200).json({ message: 'Person soft-deleted (and user if linked)' });
@@ -1741,13 +1733,6 @@ exports.getAvailableClientShifts = async (req, res) => {
           StaffShifts: (staffShiftsByRequest[row.shiftrequestid] || [])
         };
       });
-    
-    // Debug log to see what's being returned
-    console.log('DEBUG: getAvailableClientShifts (Admin/Staff) response structure:', {
-      availableShiftsCount: formatted.length,
-      sampleShift: formatted[0] || 'No shifts found',
-      pagination: { page, limit, total }
-    });
     
     // Return response based on format
     if (responseFormat === 'simple') {
@@ -2026,12 +2011,6 @@ exports.getAvailableClientShifts = async (req, res) => {
 
       if (userType === 'Employee - Standard User') {
         // EMPLOYEE SLOT-BASED LOGIC for Available Shifts only
-        console.log('DEBUG: Processing employee shift:', {
-          shiftrequestid: row.shiftrequestid,
-          employee_has_slot: row.employee_has_slot,
-          available_slots: row.available_slots,
-          userType: userType
-        });
         
         // Since we filtered out shifts where employee has a slot, 
         // we only need to handle the case where employee doesn't have a slot but there are available slots
@@ -2040,24 +2019,6 @@ exports.getAvailableClientShifts = async (req, res) => {
           const shiftSlots = staffShiftsByRequest[row.shiftrequestid] || [];
           const availableSlots = shiftSlots.filter(s => s.Status === 'open' && !s.Assignedtouserid);
           const firstAvailableSlot = availableSlots[0];
-          
-          // Debug logging to see what's happening
-          console.log('DEBUG SLOT ID ISSUE:', {
-            shiftrequestid: row.shiftrequestid,
-            shiftSlots: shiftSlots.length,
-            availableSlots: availableSlots.length,
-            firstAvailableSlot: firstAvailableSlot ? {
-              ID: firstAvailableSlot.ID,
-              Status: firstAvailableSlot.Status,
-              Assignedtouserid: firstAvailableSlot.Assignedtouserid
-            } : null,
-            slotId: firstAvailableSlot?.ID || null,
-            allSlots: shiftSlots.map(s => ({
-              ID: s.ID,
-              Status: s.Status,
-              Assignedtouserid: s.Assignedtouserid
-            }))
-          });
           
           return {
             ...baseShift,
@@ -2175,19 +2136,6 @@ exports.acceptClientStaffShift = async (req, res) => {
         const formattedShiftDate = formatDateForEmail(updatedShift.Shiftdate);
         const formattedStartTime = formatDateTimeForEmail(updatedShift.Starttime);
         const formattedEndTime = formatDateTimeForEmail(updatedShift.Endtime);
-        
-        // Log email template data for debugging
-        logger.info('Shift acceptance email data', {
-          clientName: client.clientName,
-          locationName: updatedShift.LocationName,
-          shiftDate: formattedShiftDate,
-          startTime: formattedStartTime,
-          endTime: formattedEndTime,
-          employeeName: updatedShift.employeeName,
-          rawShiftDate: updatedShift.Shiftdate,
-          rawStartTime: updatedShift.Starttime,
-          rawEndTime: updatedShift.Endtime
-        });
         
         const template = mailTemplates.shiftAcceptedClient({
           clientName: client.clientName,
@@ -2399,7 +2347,7 @@ exports.getClientLocations = async (req, res) => {
     });
     res.status(200).json({ clients: clientMap });
   } catch (err) {
-    console.error('[getClientLocations] Error:', err);
+    logger.error('Error fetching client locations', { error: err });
     res.status(500).json({ message: 'Error fetching client locations', error: err.message });
   }
 };
@@ -3936,14 +3884,6 @@ exports.getAllShiftAttachments = async (req, res) => {
 exports.downloadShiftAttachment = async (req, res) => {
   const shiftRequestId = req.params.id ? parseInt(req.params.id, 10) : null;
   const attachmentId = parseInt(req.params.attachmentId, 10);
-
-  // DEBUG: Log the request details
-  logger.info('🔍 PDF Download Request', {
-    shiftRequestId,
-    attachmentId,
-    params: req.params,
-    url: req.url
-  });
 
   try {
     let attachment;

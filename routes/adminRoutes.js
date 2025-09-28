@@ -1,8 +1,24 @@
 // routes/adminRoutes.js
 const express = require('express');
+const winston = require('winston');
 const router = express.Router();
 const { adminStaffEmailValidation, handleValidationErrors } = require('../middleware/validation');
 const { authenticate } = require('../middleware/authMiddleware');
+
+// Configure winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
 const {
   exportForOpenAI,
   exportForHuggingFace,
@@ -11,16 +27,7 @@ const {
   exportAllFormats
 } = require('../scripts/exportAITrainingData');
 
-// Debug: Check what we got from middleware
-console.log('adminStaffEmailValidation type:', typeof adminStaffEmailValidation);
-console.log('handleValidationErrors type:', typeof handleValidationErrors);
-console.log('authenticate type:', typeof authenticate);
 const crudController = require('../controllers/crudController');
-
-// Debug: Check what we got from crudController
-console.log('crudController in adminRoutes:', crudController);
-console.log('crudController.sendEmail type:', typeof crudController.sendEmail);
-console.log('crudController keys:', Object.keys(crudController));
 
 // Middleware to check if user is admin or staff
 const requireAdminOrStaff = (req, res, next) => {
@@ -51,7 +58,6 @@ router.post('/send-email',
 // Export all AI training data formats
 router.post('/export-ai-data/all', authenticate, requireAdminOrStaff, async (req, res) => {
   try {
-    console.log(`🤖 Admin ${req.user?.email} requested full AI data export`);
     const exports = await exportAllFormats();
     
     res.json({
@@ -61,7 +67,7 @@ router.post('/export-ai-data/all', authenticate, requireAdminOrStaff, async (req
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('AI data export error:', error);
+    logger.error('AI data export error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to export AI training data',
@@ -73,7 +79,7 @@ router.post('/export-ai-data/all', authenticate, requireAdminOrStaff, async (req
 // Export for OpenAI fine-tuning
 router.post('/export-ai-data/openai', authenticate, requireAdminOrStaff, async (req, res) => {
   try {
-    console.log(`🤖 Admin ${req.user?.email} requested OpenAI export`);
+    logger.info('Admin requested OpenAI export', { user: req.user?.email });
     const filepath = await exportForOpenAI();
     
     res.json({
@@ -83,7 +89,7 @@ router.post('/export-ai-data/openai', authenticate, requireAdminOrStaff, async (
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('OpenAI export error:', error);
+    logger.error('OpenAI export error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to export OpenAI training data',
@@ -95,7 +101,7 @@ router.post('/export-ai-data/openai', authenticate, requireAdminOrStaff, async (
 // Export for Hugging Face
 router.post('/export-ai-data/huggingface', authenticate, requireAdminOrStaff, async (req, res) => {
   try {
-    console.log(`🤗 Admin ${req.user?.email} requested Hugging Face export`);
+    logger.info('Admin requested Hugging Face export', { user: req.user?.email });
     const filepath = await exportForHuggingFace();
     
     res.json({
@@ -105,7 +111,7 @@ router.post('/export-ai-data/huggingface', authenticate, requireAdminOrStaff, as
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Hugging Face export error:', error);
+    logger.error('Hugging Face export error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to export Hugging Face training data',
@@ -117,7 +123,7 @@ router.post('/export-ai-data/huggingface', authenticate, requireAdminOrStaff, as
 // Export conversation dataset
 router.post('/export-ai-data/conversations', authenticate, requireAdminOrStaff, async (req, res) => {
   try {
-    console.log(`💬 Admin ${req.user?.email} requested conversation dataset export`);
+    logger.info('Admin requested conversation dataset export', { user: req.user?.email });
     const filepath = await exportConversationDataset();
     
     res.json({
@@ -127,7 +133,7 @@ router.post('/export-ai-data/conversations', authenticate, requireAdminOrStaff, 
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Conversation export error:', error);
+    logger.error('Conversation export error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to export conversation dataset',
@@ -139,7 +145,7 @@ router.post('/export-ai-data/conversations', authenticate, requireAdminOrStaff, 
 // Export analytics and insights
 router.post('/export-ai-data/analytics', authenticate, requireAdminOrStaff, async (req, res) => {
   try {
-    console.log(`📊 Admin ${req.user?.email} requested analytics export`);
+    logger.info('Admin requested analytics export', { user: req.user?.email });
     const filepath = await exportAnalytics();
     
     res.json({
@@ -149,7 +155,7 @@ router.post('/export-ai-data/analytics', authenticate, requireAdminOrStaff, asyn
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Analytics export error:', error);
+    logger.error('Analytics export error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to export analytics data',
@@ -196,7 +202,7 @@ router.get('/ai-data/stats', authenticate, requireAdminOrStaff, async (req, res)
     });
     
   } catch (error) {
-    console.error('AI stats error:', error);
+    logger.error('AI stats error', { error: error.message });
     res.status(500).json({
       success: false,
       error: 'Failed to get AI training data statistics',

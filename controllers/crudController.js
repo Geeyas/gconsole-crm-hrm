@@ -23,7 +23,7 @@ async function loadTableNames() {
     const [tables] = await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = ?`, [process.env.DB_NAME]);
     validTables = new Set(tables.map(row => row.TABLE_NAME));
   } catch (err) {
-    console.error('❌ Failed to load table names:', err);
+    logger.error('Failed to load table names', { error: err });
   }
 }
 
@@ -304,18 +304,6 @@ async function createClientLocation(req, res) {
       now  // Sysstarttime
     ];
 
-    // Log the values for debugging
-    console.log('Creating client location with values:', {
-      Clientid,
-      LocationName,
-      LocationAddress,
-      Country,
-      State,
-      Suburb,
-      Postcode,
-      Email
-    });
-
     const placeholders = insertValues.map(() => '?').join(', ');
     const query = `INSERT INTO Clientlocations (${insertFields.join(', ')}) VALUES (${placeholders})`;
     
@@ -460,10 +448,6 @@ async function updateClientLocation(req, res) {
       return res.status(400).json({ message: 'No valid fields to update.' });
     }
 
-    // Log the update for debugging
-    console.log('Updating client location with fields:', updateFields);
-    console.log('Update values:', updateValues);
-
     const setClause = updateFields.join(', ');
     const query = `UPDATE Clientlocations SET ${setClause} WHERE ID = ?`;
     const [results] = await db.query(query, [...updateValues, id]);
@@ -602,7 +586,7 @@ exports.contactAdmin = async (req, res) => {
     });
     return res.status(200).json({ success: true, message: 'Email sent successfully.' });
   } catch (err) {
-    console.error('Contact admin email error', err);
+    logger.error('Contact admin email error', { error: err });
     return res.status(500).json({ success: false, error: 'Failed to send email. Please try again later.' });
   }
 };

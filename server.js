@@ -105,6 +105,7 @@ const corsOptions = {
     'http://localhost:4200',
     'https://rostermatic-b2ae0.web.app/', //Nurselink UAT link
     'https://rostermatic-b2ae0.web.app', //Nurselink UAT link
+    
     'https://nurselink-prod-webapp.web.app', //Nurselink Prod WebAPP Link
     'https://nurselink-prod-webapp.web.app/', //NurseLink Prod WebApp Link
 

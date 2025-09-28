@@ -14,9 +14,6 @@ const {
 const { linkClientUserValidation } = require('../middleware/validationLinkClientUser');
 const { handlePDFUpload, handleMultiplePDFUploads } = require('../middleware/pdfUpload'); // Import PDF upload middleware
 
-console.log('authController object in authRoutes immediately after require:', authController);
-console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
-
 const {
   authenticate,
   authorizeManager,
@@ -249,10 +246,6 @@ router.delete('/clientshiftrequests/:id/attachments/:attachmentId', authenticate
 // ================== End Multiple PDF Attachments Management Routes ==================
 
 // ================== End PDF Attachment Management Routes ==================
-
-console.log('authController:', authController);
-console.log('authController keys:', Object.keys(authController));
-console.log('authController.getAllClientLocations:', typeof authController.getAllClientLocations);
 
 module.exports = router;
 

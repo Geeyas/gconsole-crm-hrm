@@ -296,18 +296,6 @@ exports.createClientLocation = async (req, res) => {
       now  // Sysstarttime
     ];
 
-    // Log the values for debugging
-    console.log('Creating client location with values:', {
-      Clientid,
-      LocationName,
-      LocationAddress,
-      Country,
-      State,
-      Suburb,
-      Postcode,
-      Email
-    });
-
     const placeholders = insertValues.map(() => '?').join(', ');
     const query = `INSERT INTO Clientlocations (${insertFields.join(', ')}) VALUES (${placeholders})`;
     
@@ -421,10 +409,6 @@ exports.updateClientLocation = async (req, res) => {
     if (updateFields.length === 0) {
       return res.status(400).json({ message: 'No valid fields to update.' });
     }
-
-    // Log the update for debugging
-    console.log('Updating client location with fields:', updateFields);
-    console.log('Update values:', updateValues);
 
     const setClause = updateFields.join(', ');
     const query = `UPDATE Clientlocations SET ${setClause} WHERE ID = ?`;

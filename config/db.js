@@ -21,7 +21,22 @@
 
 
 const mysql = require('mysql2/promise'); // use promise-based version
+const winston = require('winston');
 require('dotenv').config();
+
+// Configure winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -49,10 +64,10 @@ async function testConnection() {
     const connection = await pool.getConnection();
     await connection.ping();
     connection.release();
-    console.log('✅ Database connection test successful');
+    logger.info('Database connection test successful');
     return true;
   } catch (error) {
-    console.error('❌ Database connection test failed:', error.message);
+    logger.error('Database connection test failed', { error: error.message });
     return false;
   }
 }
