@@ -238,6 +238,12 @@ router.get('/clientshiftrequests/:id/attachments', authenticate, authController.
 // Download a specific PDF attachment
 router.get('/clientshiftrequests/:id/attachments/:attachmentId/download', authenticate, authController.downloadShiftAttachment);
 
+// Alternative download route (for frontend compatibility)
+router.get('/clientshiftrequests/attachments/:attachmentId/download', authenticate, (req, res, next) => {
+  // Extract attachmentId and find the shift ID from database
+  return authController.downloadShiftAttachment(req, res, next);
+});
+
 // Delete a specific PDF attachment
 router.delete('/clientshiftrequests/:id/attachments/:attachmentId', authenticate, authController.deleteShiftAttachment);
 // ================== End Multiple PDF Attachments Management Routes ==================

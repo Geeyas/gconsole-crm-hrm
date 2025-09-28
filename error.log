@@ -1208,3 +1208,421 @@
 {"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:29:48.799Z"}
 {"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:29:52.017Z"}
 {"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:29:57.644Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:43.224Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:43.782Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:45.064Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:46.050Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:48.258Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:49.128Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:53.270Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:53.768Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:55.194Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:55.457Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:55.909Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:56.184Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:56.781Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:57.149Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:47:59.596Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:00.217Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:00.833Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:01.201Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:03.203Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:03.484Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:06.378Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:06.791Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:07.301Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:07.572Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:09.050Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:09.328Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:09.691Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:10.165Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:10.782Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:11.151Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:11.702Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:12.076Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:12.784Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:13.417Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:13.685Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:13.973Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:14.284Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:14.627Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:14.936Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:15.202Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:48:15.942Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:16.214Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:16.495Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:17.042Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:17.310Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:18.156Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:18.666Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:19.178Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:48:19.591Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:20.039Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:20.305Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:20.580Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:22.560Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:23.069Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:48:23.714Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:24.252Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:25.323Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:25.790Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:26.302Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:26.723Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:27.431Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:27.816Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:28.567Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:28.960Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:29.534Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:29.896Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:30.165Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:30.605Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:30.866Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:31.218Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:31.492Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:31.919Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:32.181Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:48:32.382Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:32.642Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:48:32.906Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:00.873Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:03.468Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:06.191Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:08.381Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:10.336Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:10.975Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:13.964Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:14.737Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:16.127Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:19.902Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:20.583Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:21.222Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:21.907Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:24.037Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:24.878Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:26.055Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:26.566Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:27.677Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:28.054Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:30.193Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:30.957Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:31.299Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:33.318Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:33.790Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:34.242Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:34.566Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:35.580Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:36.343Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:36.958Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:37.412Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:38.290Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:38.804Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:40.235Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:40.746Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:41.759Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:42.341Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:43.408Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:44.228Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:49:45.238Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:45.717Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:46.175Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:46.687Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:47.197Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:49:47.916Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:52:48.277Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:52:50.958Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:52:54.886Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:53:01.825Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:03.282Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:53:06.665Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:07.674Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:09.631Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:53:10.041Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:13.629Z"}
+{"error":{},"filePath":"2025-09-28 12:29:32","level":"error","message":"Failed to download PDF from GCS","shiftRequestId":190,"timestamp":"2025-09-28T12:53:15.468Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:17.963Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:20.156Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:23.830Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:28.021Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:34.690Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:36.445Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:39.630Z"}
+{"error":{"code":"ER_BAD_FIELD_ERROR","errno":1054,"message":"Unknown column 'Userid' in 'where clause'","sql":"SELECT 1 FROM Clientstaffshifts \n           WHERE Clientshiftrequestid = 190 AND Userid = 73 AND Deletedat IS NULL","sqlMessage":"Unknown column 'Userid' in 'where clause'","sqlState":"42S22"},"level":"error","message":"Get shift request attachment error","timestamp":"2025-09-28T12:53:43.411Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:06:31.050Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:06:33.079Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:06:36.588Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:07:55.623Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:07:58.400Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:02.707Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:08.350Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:08.858Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:09.668Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:10.279Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:12.241Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:13.254Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:15.519Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:19.103Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:19.811Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:20.626Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:21.343Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:21.917Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:23.096Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:24.063Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:24.893Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:25.916Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:26.806Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:27.647Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:28.476Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:29.751Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:31.043Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:31.357Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:31.673Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:34.257Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:35.037Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:35.352Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:35.668Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:35.977Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:36.291Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:36.613Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:36.925Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:37.682Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:38.580Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:39.445Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:40.252Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:41.014Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:41.939Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:42.734Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:43.751Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:44.551Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:45.133Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:45.443Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:45.744Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:46.047Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:46.372Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:46.681Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:46.996Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:47.776Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:49.523Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:50.435Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:50.852Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:51.664Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:52.289Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:52.976Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:53.610Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:54.124Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:54.737Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:55.257Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:55.604Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:55.960Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:56.289Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:56.596Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:56.906Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:57.290Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:58.003Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:58.634Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:08:59.352Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:00.265Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:01.391Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:02.685Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:03.608Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:04.321Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:05.080Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:05.426Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:05.803Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:06.154Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:06.543Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:06.893Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:07.326Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:08.122Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:09.010Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:10.344Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:11.492Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:11.979Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:12.393Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:12.695Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:13.093Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:13.470Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:14.442Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:15.225Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:16.249Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:17.104Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:18.175Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:19.071Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:20.088Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:21.166Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:22.240Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:23.213Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:24.237Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:25.305Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:26.387Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:27.476Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:28.237Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:28.849Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:29.822Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:30.638Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:31.550Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:31.867Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:32.175Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:32.478Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:32.794Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:33.110Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:33.412Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:34.170Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:35.193Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:35.873Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:36.482Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:37.299Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:37.985Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:38.732Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:39.521Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:40.391Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:41.409Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:42.487Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:43.591Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:44.158Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:44.877Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:45.444Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:46.207Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:47.219Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:48.152Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:49.067Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:49.887Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:50.849Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:51.457Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:51.969Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:52.582Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:53.094Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:53.607Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:54.121Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:09:54.629Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:04.249Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:06.520Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:10.325Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:15.288Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:15.721Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:16.641Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:17.226Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:19.567Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:20.804Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:22.764Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:25.764Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:14:27.634Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:05.903Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:08.240Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:11.608Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:16.969Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:17.584Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:18.711Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:20.045Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:21.065Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:24.343Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:25.054Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:30.832Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:32.759Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:36.059Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:42.068Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:42.663Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:43.816Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:44.355Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:45.788Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:47.468Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:49.328Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:53.013Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:54.040Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:55.164Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:56.597Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:56.919Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:57.229Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:57.548Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:58.615Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:59.306Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:16:59.919Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:01.000Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:02.444Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:02.788Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:03.575Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:08.112Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:09.138Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:10.015Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:10.774Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:11.376Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:12.198Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:12.825Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:13.151Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:13.461Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:13.773Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:14.088Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:14.390Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:14.698Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:15.084Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:16.091Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:16.494Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:16.812Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:17.114Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:18.079Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:18.385Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:18.850Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:21.276Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:22.438Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:23.221Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:24.087Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:24.861Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:25.611Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:26.123Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:26.793Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:27.607Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:28.126Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:28.797Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:29.530Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:30.249Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:17:30.822Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:51.844Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:52.560Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:53.167Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:54.309Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:55.110Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:55.779Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:56.154Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:56.506Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:56.863Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:57.174Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:57.489Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:57.985Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:58.599Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:59.112Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:18:59.917Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:00.649Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:01.833Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:02.966Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:04.085Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:05.418Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:05.854Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:06.169Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:06.484Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:06.795Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:07.117Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:07.438Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:07.803Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:08.752Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:09.559Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:10.641Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:11.458Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:19:11.923Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:27:11.350Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:33:26.330Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:33:37.208Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:34:19.933Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T13:35:13.922Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:06:45.663Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:06:48.741Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:06:52.324Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:14:11.460Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:14:14.130Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:14:17.000Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:16:05.692Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:16:08.461Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:16:12.077Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:16:16.865Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:17:19.521Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:17:22.592Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:17:26.458Z"}
+{"error":{},"level":"error","message":"Download shift attachment error","timestamp":"2025-09-28T14:17:31.389Z"}

@@ -3934,35 +3934,59 @@ exports.getAllShiftAttachments = async (req, res) => {
 // ================== downloadShiftAttachment ==================
 // Download a specific PDF attachment by attachment ID
 exports.downloadShiftAttachment = async (req, res) => {
-  const shiftRequestId = parseInt(req.params.id, 10);
+  const shiftRequestId = req.params.id ? parseInt(req.params.id, 10) : null;
   const attachmentId = parseInt(req.params.attachmentId, 10);
 
+  // DEBUG: Log the request details
+  logger.info('🔍 PDF Download Request', {
+    shiftRequestId,
+    attachmentId,
+    params: req.params,
+    url: req.url
+  });
+
   try {
-    // Check if shift request exists
-    const [shiftRows] = await db.query(
-      'SELECT ID FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
-      [shiftRequestId]
-    );
+    let attachment;
+    
+    if (shiftRequestId) {
+      // Standard route: /clientshiftrequests/{shiftId}/attachments/{attachmentId}/download
+      // Check if shift request exists
+      const [shiftRows] = await db.query(
+        'SELECT ID FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+        [shiftRequestId]
+      );
 
-    if (!shiftRows.length) {
-      return res.status(404).json({ message: 'Shift request not found.' });
+      if (!shiftRows.length) {
+        return res.status(404).json({ message: 'Shift request not found.' });
+      }
+
+      // Get attachment details with shift validation
+      const [attachmentRows] = await db.query(
+        `SELECT a.Filename, a.Filestoreid FROM Attachments a
+         INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+         WHERE a.ID = ? AND sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
+        [attachmentId, shiftRequestId]
+      );
+
+      if (!attachmentRows.length) {
+        return res.status(404).json({ message: 'Attachment not found.' });
+      }
+      attachment = attachmentRows[0];
+    } else {
+      // Alternative route: /clientshiftrequests/attachments/{attachmentId}/download
+      // Get attachment details without shift validation (more permissive)
+      const [attachmentRows] = await db.query(
+        `SELECT a.Filename, a.Filestoreid FROM Attachments a
+         INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+         WHERE a.ID = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
+        [attachmentId]
+      );
+
+      if (!attachmentRows.length) {
+        return res.status(404).json({ message: 'Attachment not found.' });
+      }
+      attachment = attachmentRows[0];
     }
-
-    // No access control - anyone with valid JWT can download attachments
-
-    // Get attachment details (using Shiftattachments + Attachments tables)
-    const [attachmentRows] = await db.query(
-      `SELECT a.Filename, a.Filestoreid FROM Attachments a
-       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
-       WHERE a.ID = ? AND sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
-      [attachmentId, shiftRequestId]
-    );
-
-    if (!attachmentRows.length) {
-      return res.status(404).json({ message: 'Attachment not found.' });
-    }
-
-    const attachment = attachmentRows[0];
 
     // Download from Google Cloud Storage
     const fileBuffer = await downloadPDFFromGCS(attachment.Filestoreid);
