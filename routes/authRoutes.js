@@ -12,7 +12,7 @@ const {
   handleValidationErrors 
 } = require('../middleware/validation');
 const { linkClientUserValidation } = require('../middleware/validationLinkClientUser');
-const { handlePDFUpload } = require('../middleware/pdfUpload'); // Import PDF upload middleware
+const { handlePDFUpload, handleMultiplePDFUploads } = require('../middleware/pdfUpload'); // Import PDF upload middleware
 
 console.log('authController object in authRoutes immediately after require:', authController);
 console.log('Type of authController.getAllClientLocations in authRoutes immediately after require:', typeof authController.getAllClientLocations);
@@ -65,7 +65,7 @@ router.post('/register', authenticate, registerValidation, handleValidationError
 router.post('/clientshiftrequests', 
   authenticate, 
   authorizeClientOrStaffOrAdmin, 
-  handlePDFUpload, // Add PDF upload middleware before validation
+  handleMultiplePDFUploads, // Support multiple PDF attachments on shift creation
   createShiftValidation, 
   handleValidationErrors, 
   authController.createClientShiftRequest
@@ -223,6 +223,25 @@ router.delete('/clientshiftrequests/:id/attachment', authenticate, authControlle
 
 // Get attachment info for a shift request (metadata only)
 router.get('/clientshiftrequests/:id/attachment/info', authenticate, authController.getShiftRequestAttachmentInfo);
+
+// ================== Multiple PDF Attachments Management Routes ==================
+// Add multiple PDF attachments to a shift request
+router.post('/clientshiftrequests/:id/attachments', 
+  authenticate, 
+  handleMultiplePDFUploads, 
+  authController.addMultipleShiftAttachments
+);
+
+// Get all PDF attachments for a shift request
+router.get('/clientshiftrequests/:id/attachments', authenticate, authController.getAllShiftAttachments);
+
+// Download a specific PDF attachment
+router.get('/clientshiftrequests/:id/attachments/:attachmentId/download', authenticate, authController.downloadShiftAttachment);
+
+// Delete a specific PDF attachment
+router.delete('/clientshiftrequests/:id/attachments/:attachmentId', authenticate, authController.deleteShiftAttachment);
+// ================== End Multiple PDF Attachments Management Routes ==================
+
 // ================== End PDF Attachment Management Routes ==================
 
 console.log('authController:', authController);

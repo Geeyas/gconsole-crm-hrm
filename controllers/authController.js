@@ -1038,64 +1038,100 @@ exports.createClientShiftRequest = async (req, res) => {
       }
     }
 
-    // ================== Handle PDF attachment if provided ==================
-    let attachmentInfo = null;
-    if (req.file) {
+    // ================== Handle multiple PDF attachments if provided ==================
+    let attachmentInfos = [];
+    if (req.files && req.files.length > 0) {
       try {
-        // Validate PDF file
-        const validationResult = validatePDFFile(req.file);
-        if (!validationResult.valid) {
+        // Calculate total size of all files
+        const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+        const maxTotalSize = 6 * 1024 * 1024; // 6MB in bytes
+        
+        if (totalSize > maxTotalSize) {
           return res.status(400).json({ 
-            message: 'Invalid PDF file', 
-            error: validationResult.error 
+            message: 'Total attachment size exceeds 6MB limit', 
+            error: `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, Maximum allowed: 6MB` 
           });
         }
 
-        // Upload PDF to Google Cloud Storage (organize by shift date)
-        // Convert string date to Date object for GCS organization
+        // Validate all PDF files first
+        for (let i = 0; i < req.files.length; i++) {
+          const validationResult = validatePDFFile(req.files[i]);
+          if (!validationResult.valid) {
+            return res.status(400).json({ 
+              message: `Invalid PDF file: ${req.files[i].originalname}`, 
+              error: validationResult.error 
+            });
+          }
+        }
+
+        // Process each file
         const shiftDateObj = new Date(shiftdateForDB);
-        const uploadResult = await uploadPDFToGCS(req.file.buffer, req.file.originalname, clientshiftrequestid, req.file.mimetype, shiftDateObj);
         
-        // Save attachment metadata to database
-        const insertAttachmentSql = `INSERT INTO Attachments 
-          (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        
-        const attachmentParams = [
-          'Clientshiftrequest',
-          clientshiftrequestid.toString(),
-          uploadResult.filename,
-          uploadResult.gcsPath,
-          req.file.size,
-          '.pdf',
-          now,
-          createdbyid,
-          now,
-          updatedbyid
-        ];
+        for (let i = 0; i < req.files.length; i++) {
+          const file = req.files[i];
+          
+          // Upload PDF to Google Cloud Storage
+          const uploadResult = await uploadPDFToGCS(file.buffer, file.originalname, clientshiftrequestid, file.mimetype, shiftDateObj);
+          
+          // Save attachment metadata to Attachments table (original table)
+          const insertAttachmentSql = `INSERT INTO Attachments 
+            (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+          
+          const attachmentParams = [
+            'Clientshiftrequest',
+            clientshiftrequestid.toString(),
+            uploadResult.filename,
+            uploadResult.gcsPath,
+            file.size,
+            '.pdf',
+            now,
+            createdbyid,
+            now,
+            updatedbyid
+          ];
 
-        const [attachmentResult] = await dbConn.query(insertAttachmentSql, attachmentParams);
-        
-        attachmentInfo = {
-          id: attachmentResult.insertId,
-          fileName: uploadResult.filename,
-          fileSize: req.file.size,
-          uploadedAt: now
-        };
+          const [attachmentResult] = await dbConn.query(insertAttachmentSql, attachmentParams);
+          
+          // Link attachment to shift in Shiftattachments table
+          const linkAttachmentSql = `INSERT INTO Shiftattachments 
+            (Clientshiftrequestid, Attachmentid, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`;
+          
+          const linkParams = [
+            clientshiftrequestid,
+            attachmentResult.insertId,
+            now,
+            createdbyid,
+            now,
+            updatedbyid,
+            now
+          ];
 
-        logger.info('PDF attachment uploaded successfully', {
-          shiftRequestId: clientshiftrequestid,
-          attachmentId: attachmentResult.insertId,
-          fileName: uploadResult.filename,
-          gcsPath: uploadResult.gcsPath
-        });
+          await dbConn.query(linkAttachmentSql, linkParams);
+          
+          attachmentInfos.push({
+            id: attachmentResult.insertId,
+            fileName: uploadResult.filename,
+            fileSize: file.size,
+            uploadedAt: now,
+            originalName: file.originalname
+          });
+
+          logger.info('PDF attachment uploaded successfully', {
+            shiftRequestId: clientshiftrequestid,
+            attachmentId: attachmentResult.insertId,
+            fileName: uploadResult.filename,
+            gcsPath: uploadResult.gcsPath
+          });
+        }
       } catch (pdfError) {
-        logger.error('PDF attachment processing error', { 
+        logger.error('PDF attachments processing error', { 
           error: pdfError,
           shiftRequestId: clientshiftrequestid 
         });
         return res.status(500).json({ 
-          message: 'Failed to process PDF attachment', 
+          message: 'Failed to process PDF attachments', 
           error: pdfError.message 
         });
       }
@@ -1250,9 +1286,11 @@ exports.createClientShiftRequest = async (req, res) => {
       }
     };
 
-    // Include attachment info if PDF was uploaded
-    if (attachmentInfo) {
-      responseData.shift.attachment = attachmentInfo;
+    // Include attachments info if PDFs were uploaded
+    if (attachmentInfos && attachmentInfos.length > 0) {
+      responseData.shift.attachments = attachmentInfos;
+      responseData.shift.totalAttachments = attachmentInfos.length;
+      responseData.shift.totalAttachmentSize = attachmentInfos.reduce((sum, att) => sum + att.fileSize, 0);
     }
 
     res.status(201).json(responseData);
@@ -2499,10 +2537,14 @@ exports.updateClientShiftRequest = async (req, res) => {
     if (userType !== 'System Admin' && userType !== 'Staff - Standard User' && shift.Createdbyid !== userId) {
       return res.status(403).json({ message: 'Access denied: Only the creator or staff/admin can edit this shift.' });
     }
-    // Prevent editing if shift has started or is not editable
-    const shiftStart = new Date(shift.Starttime);
-    if (shiftStart <= now) {
-      return res.status(400).json({ message: 'Cannot edit shift: already started or not in editable state.' });
+    // Prevent editing only if shift started before today (yesterday or earlier)
+    const shiftStartDate = new Date(shift.Starttime);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to beginning of today
+    shiftStartDate.setHours(0, 0, 0, 0); // Set to beginning of shift date
+    
+    if (shiftStartDate < today) {
+      return res.status(400).json({ message: 'Cannot edit shift: shift started yesterday or earlier and is no longer editable.' });
     }
     // Build update fields
     const updates = [];
@@ -2826,23 +2868,29 @@ exports.getMyShiftsWithAttachments = async (req, res) => {
       return res.status(403).json({ message: 'Access denied: Only employees, staff, or admin can view their shifts.' });
     }
 
-    // Get all client staff shifts assigned to this user with attachment info
+    // Get all client staff shifts assigned to this user with attachment info from Shiftattachments + Attachments tables
     const [shifts] = await db.query(
       `SELECT css.*, csr.Shiftdate, csr.Starttime, csr.Endtime, cl.LocationName, cl.LocationAddress, c.Name AS clientname, 
               qg.Name AS qualificationgroupname,
-              a.ID as attachment_id, a.Filename as attachment_filename, a.Filesize as attachment_filesize, a.Createdat as attachment_created
+              COUNT(sa.Attachmentid) as attachment_count,
+              GROUP_CONCAT(a.ID) as attachment_ids,
+              GROUP_CONCAT(a.Filename) as attachment_filenames,
+              GROUP_CONCAT(a.Filesize) as attachment_filesizes,
+              SUM(a.Filesize) as total_attachment_size
        FROM Clientstaffshifts css
        LEFT JOIN Clientshiftrequests csr ON css.Clientshiftrequestid = csr.ID
        LEFT JOIN Clientlocations cl ON csr.Clientlocationid = cl.ID
        LEFT JOIN Clients c ON cl.clientid = c.ID
        LEFT JOIN Qualificationgroups qg ON csr.Qualificationgroupid = qg.ID
-       LEFT JOIN Attachments a ON (a.Sourcetype = 'Clientshiftrequest' AND a.Importreference = csr.ID AND a.Deletedat IS NULL)
+       LEFT JOIN Shiftattachments sa ON (sa.Clientshiftrequestid = csr.ID AND sa.Deletedat IS NULL)
+       LEFT JOIN Attachments a ON (sa.Attachmentid = a.ID AND a.Deletedat IS NULL)
        WHERE css.Assignedtouserid = ? AND css.Deletedat IS NULL
+       GROUP BY css.ID
        ORDER BY csr.Shiftdate ASC, csr.Starttime ASC`,
       [userId]
     );
 
-    // Format the response with attachment information
+    // Format the response with multiple attachments information
     const formatted = shifts.map(s => {
       const shift = {
         ...s,
@@ -2851,25 +2899,34 @@ exports.getMyShiftsWithAttachments = async (req, res) => {
         Endtime: s.Endtime
       };
 
-      // Add attachment information
-      if (s.attachment_id) {
-        shift.attachment = {
-          id: s.attachment_id,
-          fileName: s.attachment_filename,
-          fileSize: s.attachment_filesize,
-          uploadedAt: s.attachment_created,
-          hasAttachment: true
-        };
+      // Add multiple attachments information
+      const attachmentCount = parseInt(s.attachment_count) || 0;
+      if (attachmentCount > 0) {
+        const attachmentIds = s.attachment_ids ? s.attachment_ids.split(',') : [];
+        const attachmentFilenames = s.attachment_filenames ? s.attachment_filenames.split(',') : [];
+        const attachmentFilesizes = s.attachment_filesizes ? s.attachment_filesizes.split(',').map(size => parseInt(size) || 0) : [];
+        
+        shift.attachments = attachmentIds.map((id, index) => ({
+          id: parseInt(id),
+          fileName: attachmentFilenames[index] || '',
+          fileSize: attachmentFilesizes[index] || 0
+        }));
+        shift.hasAttachments = true;
+        shift.attachmentCount = attachmentCount;
+        shift.totalAttachmentSize = parseInt(s.total_attachment_size) || 0;
       } else {
-        shift.attachment = null;
-        shift.hasAttachment = false;
+        shift.attachments = [];
+        shift.hasAttachments = false;
+        shift.attachmentCount = 0;
+        shift.totalAttachmentSize = 0;
       }
 
       // Remove the raw attachment fields from the response
-      delete shift.attachment_id;
-      delete shift.attachment_filename;
-      delete shift.attachment_filesize;
-      delete shift.attachment_created;
+      delete shift.attachment_count;
+      delete shift.attachment_ids;
+      delete shift.attachment_filenames;
+      delete shift.attachment_filesizes;
+      delete shift.total_attachment_size;
 
       return shift;
     });
@@ -2877,7 +2934,8 @@ exports.getMyShiftsWithAttachments = async (req, res) => {
     return res.status(200).json({ 
       myShifts: formatted,
       totalShifts: formatted.length,
-      shiftsWithAttachments: formatted.filter(s => s.hasAttachment !== false).length
+      shiftsWithAttachments: formatted.filter(s => s.hasAttachments === true).length,
+      totalAttachments: formatted.reduce((sum, s) => sum + s.attachmentCount, 0)
     });
   } catch (err) {
     logger.error('Get my shifts with attachments error', { error: err });
@@ -3295,11 +3353,13 @@ exports.getShiftRequestAttachment = async (req, res) => {
   const userType = req.user?.usertype;
 
   try {
-    // Check if attachment exists for this shift request
+    // Check if attachment exists for this shift request (using Shiftattachments + Attachments tables)
     const [attachmentRows] = await db.query(
-      `SELECT * FROM Attachments 
-       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
-      [shiftRequestId.toString()]
+      `SELECT a.* FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL
+       ORDER BY sa.Createdat ASC LIMIT 1`,
+      [shiftRequestId]
     );
 
     if (!attachmentRows.length) {
@@ -3387,12 +3447,13 @@ exports.getShiftRequestAttachmentInfo = async (req, res) => {
   const userType = req.user?.usertype;
 
   try {
-    // Check if attachment exists
+    // Check if attachment exists (using Shiftattachments + Attachments tables)
     const [attachmentRows] = await db.query(
-      `SELECT ID, Filename, Filesize, Createdat 
-       FROM Attachments 
-       WHERE Sourcetype = 'Clientshiftrequest' AND Importreference = ? AND Deletedat IS NULL`,
-      [shiftRequestId.toString()]
+      `SELECT a.ID, a.Filename, a.Filesize, a.Createdat FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL
+       ORDER BY sa.Createdat ASC LIMIT 1`,
+      [shiftRequestId]
     );
 
     if (!attachmentRows.length) {
@@ -3414,7 +3475,7 @@ exports.getShiftRequestAttachmentInfo = async (req, res) => {
       } else {
         const [staffShiftRows] = await db.query(
           `SELECT 1 FROM Clientstaffshifts 
-           WHERE Clientshiftrequestid = ? AND Userid = ? AND Deletedat IS NULL`,
+           WHERE Clientshiftrequestid = ? AND Assignedtouserid = ? AND Deletedat IS NULL`,
           [shiftRequestId, userId]
         );
         if (staffShiftRows.length > 0) {
@@ -3434,9 +3495,9 @@ exports.getShiftRequestAttachmentInfo = async (req, res) => {
       message: 'Attachment info retrieved successfully',
       attachment: {
         id: attachment.ID,
-        fileName: attachment.FileName,
-        fileSize: attachment.FileSize,
-        mimeType: attachment.MimeType,
+        fileName: attachment.Filename,
+        fileSize: attachment.Filesize,
+        mimeType: 'application/pdf',
         uploadedAt: attachment.Createdat
       }
     });
@@ -3664,3 +3725,335 @@ exports.deleteShiftRequestAttachment = async (req, res) => {
 // ================== end deleteShiftRequestAttachment ==================
 
 // ================== End PDF Attachment Management Methods ==================
+
+// ================== Multiple PDF Attachments Management Methods ==================
+
+// ================== addMultipleShiftAttachments ==================
+// Add multiple PDF attachments to an existing shift request
+exports.addMultipleShiftAttachments = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const userId = req.user?.id;
+  const userType = req.user?.usertype;
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ message: 'No files uploaded. Please select PDF files to attach.' });
+  }
+
+  try {
+    // Check if shift request exists and get shift date for GCS organization
+    const [shiftRows] = await db.query(
+      'SELECT Shiftdate, Createdbyid FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    // Access control - same as other attachment methods
+    let hasAccess = false;
+    if (userType === 'System Admin' || userType === 'Staff - Standard User') {
+      hasAccess = true;
+    } else {
+      if (shiftRows[0].Createdbyid === userId) {
+        hasAccess = true;
+      } else {
+        const [staffShiftRows] = await db.query(
+          `SELECT 1 FROM Clientstaffshifts 
+           WHERE Clientshiftrequestid = ? AND Assignedtouserid = ? AND Deletedat IS NULL`,
+          [shiftRequestId, userId]
+        );
+        if (staffShiftRows.length > 0) {
+          hasAccess = true;
+        }
+      }
+    }
+
+    if (!hasAccess) {
+      return res.status(403).json({ 
+        message: 'Access denied: You can only add attachments to shifts you are assigned to or created.' 
+      });
+    }
+
+    // Get existing attachments to check total size
+    const [existingAttachments] = await db.query(
+      `SELECT a.Filesize FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
+      [shiftRequestId]
+    );
+
+    // Calculate current total size
+    const existingTotalSize = existingAttachments.reduce((sum, att) => sum + (att.Filesize || 0), 0);
+    const newFilesSize = req.files.reduce((sum, file) => sum + file.size, 0);
+    const totalSize = existingTotalSize + newFilesSize;
+    const maxTotalSize = 6 * 1024 * 1024; // 6MB in bytes
+    
+    if (totalSize > maxTotalSize) {
+      return res.status(400).json({ 
+        message: 'Total attachment size would exceed 6MB limit', 
+        error: `Current size: ${(existingTotalSize / (1024 * 1024)).toFixed(2)}MB, New files: ${(newFilesSize / (1024 * 1024)).toFixed(2)}MB, Total would be: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, Maximum allowed: 6MB` 
+      });
+    }
+
+    // Validate all PDF files
+    for (let i = 0; i < req.files.length; i++) {
+      const validationResult = validatePDFFile(req.files[i]);
+      if (!validationResult.valid) {
+        return res.status(400).json({ 
+          message: `Invalid PDF file: ${req.files[i].originalname}`, 
+          error: validationResult.error 
+        });
+      }
+    }
+
+    // Process each file
+    const attachmentInfos = [];
+    const shiftDateObj = new Date(shiftRows[0].Shiftdate);
+    const now = new Date();
+    const nowFormatted = now.toISOString().slice(0, 19).replace('T', ' '); // Convert to MySQL datetime format
+    
+    for (let i = 0; i < req.files.length; i++) {
+      const file = req.files[i];
+      
+      // Upload PDF to Google Cloud Storage
+      const uploadResult = await uploadPDFToGCS(file.buffer, file.originalname, shiftRequestId, file.mimetype, shiftDateObj);
+      
+      // Save attachment metadata to Attachments table
+      const insertAttachmentSql = `INSERT INTO Attachments 
+        (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      
+      const attachmentParams = [
+        'Clientshiftrequest',
+        shiftRequestId.toString(),
+        uploadResult.filename,
+        uploadResult.gcsPath,
+        file.size,
+        '.pdf',
+        nowFormatted,
+        userId,
+        nowFormatted,
+        userId
+      ];
+
+      const [attachmentResult] = await db.query(insertAttachmentSql, attachmentParams);
+      
+      // Link attachment to shift in Shiftattachments table
+      const linkAttachmentSql = `INSERT INTO Shiftattachments 
+        (Clientshiftrequestid, Attachmentid, Createdat, Createdbyid, Updatedat, Updatedbyid, Sysstarttime)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      
+      const linkParams = [
+        shiftRequestId,
+        attachmentResult.insertId,
+        nowFormatted,
+        userId,
+        nowFormatted,
+        userId,
+        nowFormatted
+      ];
+
+      await db.query(linkAttachmentSql, linkParams);
+      
+      attachmentInfos.push({
+        id: attachmentResult.insertId,
+        fileName: uploadResult.filename,
+        fileSize: file.size,
+        uploadedAt: now,
+        originalName: file.originalname
+      });
+    }
+
+    res.status(201).json({
+      message: `${attachmentInfos.length} PDF attachments added successfully`,
+      attachments: attachmentInfos,
+      totalAttachments: existingAttachments.length + attachmentInfos.length,
+      totalSize: totalSize
+    });
+
+  } catch (err) {
+    logger.error('Add multiple shift attachments error', { error: err });
+    res.status(500).json({ message: 'Failed to add attachments.', error: err.message });
+  }
+};
+// ================== end addMultipleShiftAttachments ==================
+
+// ================== getAllShiftAttachments ==================
+// Get all PDF attachments for a shift request
+exports.getAllShiftAttachments = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+
+  try {
+    // Check if shift request exists
+    const [shiftRows] = await db.query(
+      'SELECT ID FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    // No access control - anyone with valid JWT can view attachments
+
+    // Get all attachments for this shift (using Shiftattachments + Attachments tables)
+    const [attachments] = await db.query(
+      `SELECT a.ID, a.Filename, a.Filesize, a.Fileextension, sa.Createdat, sa.Createdbyid 
+       FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL
+       ORDER BY sa.Createdat ASC`,
+      [shiftRequestId]
+    );
+
+    const totalSize = attachments.reduce((sum, att) => sum + (att.Filesize || 0), 0);
+
+    res.status(200).json({
+      message: 'Attachments retrieved successfully',
+      attachments: attachments.map(att => ({
+        id: att.ID,
+        fileName: att.Filename,
+        fileSize: att.Filesize,
+        fileExtension: att.Fileextension,
+        uploadedAt: att.Createdat,
+        uploadedBy: att.Createdbyid
+      })),
+      totalAttachments: attachments.length,
+      totalSize: totalSize,
+      totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2)
+    });
+
+  } catch (err) {
+    logger.error('Get all shift attachments error', { error: err });
+    res.status(500).json({ message: 'Failed to retrieve attachments.', error: err.message });
+  }
+};
+// ================== end getAllShiftAttachments ==================
+
+// ================== downloadShiftAttachment ==================
+// Download a specific PDF attachment by attachment ID
+exports.downloadShiftAttachment = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const attachmentId = parseInt(req.params.attachmentId, 10);
+
+  try {
+    // Check if shift request exists
+    const [shiftRows] = await db.query(
+      'SELECT ID FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    // No access control - anyone with valid JWT can download attachments
+
+    // Get attachment details (using Shiftattachments + Attachments tables)
+    const [attachmentRows] = await db.query(
+      `SELECT a.Filename, a.Filestoreid FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE a.ID = ? AND sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
+      [attachmentId, shiftRequestId]
+    );
+
+    if (!attachmentRows.length) {
+      return res.status(404).json({ message: 'Attachment not found.' });
+    }
+
+    const attachment = attachmentRows[0];
+
+    // Download from Google Cloud Storage
+    const fileBuffer = await downloadPDFFromGCS(attachment.Filestoreid);
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.Filename}"`);
+    res.send(fileBuffer);
+
+  } catch (err) {
+    logger.error('Download shift attachment error', { error: err });
+    res.status(500).json({ message: 'Failed to download attachment.', error: err.message });
+  }
+};
+// ================== end downloadShiftAttachment ==================
+
+// ================== deleteShiftAttachment ==================
+// Delete a specific PDF attachment by attachment ID
+exports.deleteShiftAttachment = async (req, res) => {
+  const shiftRequestId = parseInt(req.params.id, 10);
+  const attachmentId = parseInt(req.params.attachmentId, 10);
+  const userId = req.user?.id;
+
+  try {
+    // Check if shift request exists
+    const [shiftRows] = await db.query(
+      'SELECT ID FROM Clientshiftrequests WHERE ID = ? AND Deletedat IS NULL',
+      [shiftRequestId]
+    );
+
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Shift request not found.' });
+    }
+
+    // No access control - anyone with valid JWT can delete attachments
+
+    // Get attachment details (using Shiftattachments + Attachments tables)
+    const [attachmentRows] = await db.query(
+      `SELECT a.Filename, a.Filestoreid FROM Attachments a
+       INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
+       WHERE a.ID = ? AND sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
+      [attachmentId, shiftRequestId]
+    );
+
+    if (!attachmentRows.length) {
+      return res.status(404).json({ message: 'Attachment not found.' });
+    }
+
+    const attachment = attachmentRows[0];
+    const now = new Date().toISOString();
+
+    // Soft delete both records
+    await db.query(
+      `UPDATE Shiftattachments 
+       SET Deletedat = ?, Updatedbyid = ? 
+       WHERE Attachmentid = ? AND Clientshiftrequestid = ?`,
+      [now, userId, attachmentId, shiftRequestId]
+    );
+    
+    await db.query(
+      `UPDATE Attachments 
+       SET Deletedat = ?, Updatedbyid = ? 
+       WHERE ID = ?`,
+      [now, userId, attachmentId]
+    );
+
+    // Delete from Google Cloud Storage
+    try {
+      await deletePDFFromGCS(attachment.Filestoreid);
+    } catch (deleteError) {
+      logger.error('Failed to delete PDF from GCS', { 
+        error: deleteError,
+        filePath: attachment.Filestoreid 
+      });
+      // Continue - we've soft-deleted the DB record
+    }
+
+    res.status(200).json({
+      message: 'Attachment deleted successfully',
+      deletedAttachment: {
+        id: attachmentId,
+        fileName: attachment.Filename,
+        deletedAt: now
+      }
+    });
+
+  } catch (err) {
+    logger.error('Delete shift attachment error', { error: err });
+    res.status(500).json({ message: 'Failed to delete attachment.', error: err.message });
+  }
+};
+// ================== end deleteShiftAttachment ==================
+
+// ================== End Multiple PDF Attachments Management Methods ==================
