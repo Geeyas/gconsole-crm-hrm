@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GConsole API Integration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; border: none; }
+        .btn-success { background-color: #28a745; color: white; border: none; }
+        .btn-danger { background-color: #dc3545; color: white; border: none; }
+        textarea { width: 100%; height: 150px; margin: 10px 0; }
+        input[type="text"], input[type="password"] { width: 300px; padding: 8px; margin: 5px; }
+        .log { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 GConsole API Integration Test Suite</h1>
+    
+    <div class="section">
+        <h2>📋 API Configuration</h2>
+        <label>API Base URL:</label>
+        <input type="text" id="apiBaseUrl" value="http://localhost:3000/api" placeholder="http://localhost:3000/api">
+        <br>
+        <label>JWT Token:</label>
+        <input type="password" id="jwtToken" placeholder="Bearer token (get from login)">
+        <br>
+        <button class="btn-primary" onclick="testConnection()">🔗 Test Connection</button>
+    </div>
+
+    <div class="section">
+        <h2>🔐 Authentication Test</h2>
+        <label>Email:</label>
+        <input type="text" id="loginEmail" placeholder="user@example.com">
+        <br>
+        <label>Password:</label>
+        <input type="password" id="loginPassword" placeholder="password">
+        <br>
+        <button class="btn-success" onclick="testLogin()">🔑 Login</button>
+        <button class="btn-danger" onclick="testLogout()">🚪 Logout</button>
+    </div>
+
+    <div class="section">
+        <h2>📎 Attachment Download Test</h2>
+        <label>Attachment ID:</label>
+        <input type="text" id="attachmentId" placeholder="123" value="190">
+        <br>
+        <label>Shift Request ID (optional for alternative route):</label>
+        <input type="text" id="shiftRequestId" placeholder="456">
+        <br>
+        <button class="btn-primary" onclick="testDownloadStandard()">📥 Download (Standard Route)</button>
+        <button class="btn-primary" onclick="testDownloadAlternative()">📥 Download (Alternative Route)</button>
+        <button class="btn-success" onclick="testGetAttachments()">📋 List Attachments</button>
+    </div>
+
+    <div class="section">
+        <h2>📊 Other API Tests</h2>
+        <button class="btn-primary" onclick="testGetShifts()">📅 Get My Shifts</button>
+        <button class="btn-primary" onclick="testGetShiftsWithAttachments()">📋 Get Shifts with Attachments</button>
+        <button class="btn-primary" onclick="testGetQualifications()">🎓 Get My Qualifications</button>
+    </div>
+
+    <div class="section">
+        <h2>📝 Response Log</h2>
+        <button class="btn-danger" onclick="clearLog()">🗑️ Clear Log</button>
+        <div class="log" id="responseLog"></div>
+    </div>
+
+    <script>
+        let token = '';
+
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('responseLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorMap = {
+                'success': 'green',
+                'error': 'red',
+                'warning': 'orange',
+                'info': 'blue'
+            };
+            
+            logElement.innerHTML += `<div style="color: ${colorMap[type] || 'black'};">[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('responseLog').innerHTML = '';
+        }
+
+        function getApiUrl() {
+            return document.getElementById('apiBaseUrl').value.replace(/\/$/, '');
+        }
+
+        function getAuthHeaders() {
+            const tokenInput = document.getElementById('jwtToken').value;
+            const authToken = token || tokenInput;
+            
+            if (!authToken) {
+                log('⚠️ Warning: No JWT token provided. Login first or manually enter token.', 'warning');
+                return {};
+            }
+            
+            return {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        async function makeRequest(url, options = {}) {
+            try {
+                log(`🚀 Making ${options.method || 'GET'} request to: ${url}`, 'info');
+                
+                const response = await fetch(url, {
+                    headers: getAuthHeaders(),
+                    ...options
+                });
+
+                const contentType = response.headers.get('content-type');
+                let data;
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else if (contentType && contentType.includes('application/pdf')) {
+                    data = `PDF File (${response.headers.get('content-length') || 'unknown'} bytes)`;
+                    // For PDF downloads, create a download link
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = 'attachment.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                } else {
+                    data = await response.text();
+                }
+
+                if (response.ok) {
+                    log(`✅ Success (${response.status}): ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    log(`❌ Error (${response.status}): ${JSON.stringify(data, null, 2)}`, 'error');
+                }
+
+                return { success: response.ok, data, status: response.status };
+
+            } catch (error) {
+                log(`🔥 Network Error: ${error.message}`, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function testConnection() {
+            const result = await makeRequest(getApiUrl());
+            if (result.success) {
+                log('✅ API connection successful!', 'success');
+            } else {
+                log('❌ API connection failed!', 'error');
+            }
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!email || !password) {
+                log('❌ Please enter email and password', 'error');
+                return;
+            }
+
+            const result = await makeRequest(`${getApiUrl()}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (result.success && result.data.token) {
+                token = result.data.token;
+                document.getElementById('jwtToken').value = token;
+                log('✅ Login successful! Token saved.', 'success');
+            } else {
+                log('❌ Login failed!', 'error');
+            }
+        }
+
+        async function testLogout() {
+            const result = await makeRequest(`${getApiUrl()}/logout`, { method: 'POST' });
+            if (result.success) {
+                token = '';
+                document.getElementById('jwtToken').value = '';
+                log('✅ Logout successful!', 'success');
+            }
+        }
+
+        async function testDownloadStandard() {
+            const attachmentId = document.getElementById('attachmentId').value;
+            const shiftRequestId = document.getElementById('shiftRequestId').value;
+
+            if (!attachmentId || !shiftRequestId) {
+                log('❌ Please enter both Attachment ID and Shift Request ID for standard route', 'error');
+                return;
+            }
+
+            await makeRequest(`${getApiUrl()}/clientshiftrequests/${shiftRequestId}/attachments/${attachmentId}/download`);
+        }
+
+        async function testDownloadAlternative() {
+            const attachmentId = document.getElementById('attachmentId').value;
+
+            if (!attachmentId) {
+                log('❌ Please enter Attachment ID', 'error');
+                return;
+            }
+
+            await makeRequest(`${getApiUrl()}/clientshiftrequests/attachments/${attachmentId}/download`);
+        }
+
+        async function testGetAttachments() {
+            const shiftRequestId = document.getElementById('shiftRequestId').value;
+
+            if (!shiftRequestId) {
+                log('❌ Please enter Shift Request ID', 'error');
+                return;
+            }
+
+            await makeRequest(`${getApiUrl()}/clientshiftrequests/${shiftRequestId}/attachments`);
+        }
+
+        async function testGetShifts() {
+            await makeRequest(`${getApiUrl()}/my-shifts`);
+        }
+
+        async function testGetShiftsWithAttachments() {
+            await makeRequest(`${getApiUrl()}/my-shifts-with-attachments`);
+        }
+
+        async function testGetQualifications() {
+            await makeRequest(`${getApiUrl()}/my-qualifications`);
+        }
+
+        // Auto-load saved token if available
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedToken = localStorage.getItem('gconsole_jwt_token');
+            if (savedToken) {
+                document.getElementById('jwtToken').value = savedToken;
+                token = savedToken;
+                log('ℹ️ Loaded saved JWT token from localStorage', 'info');
+            }
+        });
+
+        // Save token to localStorage when changed
+        document.getElementById('jwtToken').addEventListener('change', function() {
+            const tokenValue = this.value;
+            if (tokenValue) {
+                localStorage.setItem('gconsole_jwt_token', tokenValue);
+                token = tokenValue;
+            }
+        });
+
+        log('🎯 API Test Suite loaded. Start by testing connection or logging in.', 'info');
+    </script>
+</body>
+</html>

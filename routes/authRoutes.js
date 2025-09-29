@@ -13,6 +13,7 @@ const {
 } = require('../middleware/validation');
 const { linkClientUserValidation } = require('../middleware/validationLinkClientUser');
 const { handlePDFUpload, handleMultiplePDFUploads } = require('../middleware/pdfUpload'); // Import PDF upload middleware
+const { validateAttachmentId, validateShiftRequestId, handleAttachmentValidationErrors } = require('../middleware/attachmentValidation');
 
 const {
   authenticate,
@@ -199,7 +200,12 @@ router.get('/my-qualifications', authenticate, authController.getMyQualification
 
 // ================== PDF Attachment Management Routes ==================
 // View/download PDF attachment for a shift request (only assigned employees can access)
-router.get('/clientshiftrequests/:id/attachment', authenticate, authController.getShiftRequestAttachment);
+router.get('/clientshiftrequests/:id/attachment', 
+  authenticate, 
+  validateShiftRequestId,
+  handleAttachmentValidationErrors,
+  authController.getShiftRequestAttachment
+);
 
 // Create/Add PDF attachment for a shift request (only creator or staff/admin)
 router.post('/clientshiftrequests/:id/attachment', 
@@ -233,16 +239,55 @@ router.post('/clientshiftrequests/:id/attachments',
 router.get('/clientshiftrequests/:id/attachments', authenticate, authController.getAllShiftAttachments);
 
 // Download a specific PDF attachment
-router.get('/clientshiftrequests/:id/attachments/:attachmentId/download', authenticate, authController.downloadShiftAttachment);
+router.get('/clientshiftrequests/:id/attachments/:attachmentId/download', 
+  authenticate, 
+  validateShiftRequestId,
+  validateAttachmentId,
+  handleAttachmentValidationErrors,
+  authController.downloadShiftAttachment
+);
 
 // Alternative download route (for frontend compatibility)
-router.get('/clientshiftrequests/attachments/:attachmentId/download', authenticate, (req, res, next) => {
-  // Extract attachmentId and find the shift ID from database
-  return authController.downloadShiftAttachment(req, res, next);
+router.get('/clientshiftrequests/attachments/:attachmentId/download', authenticate, async (req, res, next) => {
+  try {
+    // First, find the shift ID from the attachment ID
+    const attachmentId = parseInt(req.params.attachmentId, 10);
+    
+    if (!attachmentId) {
+      return res.status(400).json({ message: 'Invalid attachment ID.' });
+    }
+    
+    // Query to get shift request ID from attachment
+    const { pool: db } = require('../config/db');
+    const [shiftRows] = await db.query(
+      `SELECT sa.Clientshiftrequestid as shiftId FROM Shiftattachments sa
+       INNER JOIN Attachments a ON a.ID = sa.Attachmentid
+       WHERE sa.Attachmentid = ? AND sa.Deletedat IS NULL AND a.Deletedat IS NULL`,
+      [attachmentId]
+    );
+    
+    if (!shiftRows.length) {
+      return res.status(404).json({ message: 'Attachment not found or shift not associated.' });
+    }
+    
+    // Set the shift ID in params for the controller
+    req.params.id = shiftRows[0].shiftId;
+    req.params.attachmentId = attachmentId;
+    
+    return authController.downloadShiftAttachment(req, res, next);
+  } catch (err) {
+    return res.status(500).json({ message: 'Error processing download request.', error: err.message });
+  }
 });
 
 // Delete a specific PDF attachment
-router.delete('/clientshiftrequests/:id/attachments/:attachmentId', authenticate, authController.deleteShiftAttachment);
+router.delete('/clientshiftrequests/:id/attachments/:attachmentId', 
+  authenticate,
+  validateShiftRequestId,
+  validateAttachmentId,
+  handleAttachmentValidationErrors,
+  authController.deleteShiftAttachment
+);
 // ================== End Multiple PDF Attachments Management Routes ==================
 
 // ================== End PDF Attachment Management Routes ==================

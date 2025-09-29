@@ -151,12 +151,17 @@ async function downloadPDFFromGCS(gcsPath) {
     throw new Error('GCS not initialized - PDF download failed');
   }
 
+  if (!gcsPath) {
+    throw new Error('GCS path is required for download');
+  }
+
   try {
     const file = bucket.file(gcsPath);
     
     // Check if file exists
     const [exists] = await file.exists();
     if (!exists) {
+      logger.error('PDF file not found in GCS storage', { gcsPath });
       throw new Error('PDF file not found in storage');
     }
     
@@ -173,10 +178,17 @@ async function downloadPDFFromGCS(gcsPath) {
   } catch (error) {
     logger.error('❌ Failed to download PDF from GCS:', {
       error: error.message,
-      gcsPath
+      gcsPath,
+      bucketName: process.env.GCS_BUCKET_NAME,
+      projectId: process.env.GCS_PROJECT_ID
     });
     
-    throw new Error(`PDF download failed: ${error.message}`);
+    // Re-throw with more context
+    if (error.message.includes('PDF file not found in storage')) {
+      throw error; // Already has good error message
+    } else {
+      throw new Error(`PDF download failed: ${error.message}`);
+    }
   }
 }
 

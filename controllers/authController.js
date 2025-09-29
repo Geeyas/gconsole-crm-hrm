@@ -3301,20 +3301,33 @@ exports.getShiftRequestAttachment = async (req, res) => {
   const userType = req.user?.usertype;
 
   try {
-    // Check if attachment exists for this shift request (using Shiftattachments + Attachments tables)
+    // Check if attachments exist for this shift request (using Shiftattachments + Attachments tables)
     const [attachmentRows] = await db.query(
-      `SELECT a.* FROM Attachments a
+      `SELECT a.ID, a.Filename, a.Filestoreid, a.Filesize, a.Createdat 
+       FROM Attachments a
        INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
        WHERE sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL
-       ORDER BY sa.Createdat ASC LIMIT 1`,
+       ORDER BY sa.Createdat ASC`,
       [shiftRequestId]
     );
 
     if (!attachmentRows.length) {
-      return res.status(404).json({ message: 'No attachment found for this shift request.' });
+      logger.warn('No attachments found for shift request', { shiftRequestId, userId });
+      return res.status(404).json({ 
+        message: 'No attachment found for this shift request.',
+        shiftRequestId: shiftRequestId
+      });
     }
 
+    // For the single attachment endpoint, return the first attachment
     const attachment = attachmentRows[0];
+
+    logger.info('Found attachment for shift request', { 
+      shiftRequestId, 
+      attachmentId: attachment.ID, 
+      filename: attachment.Filename,
+      filestoreid: attachment.Filestoreid
+    });
 
     // Check access permissions
     let hasAccess = false;
@@ -3346,8 +3359,30 @@ exports.getShiftRequestAttachment = async (req, res) => {
     }
 
     if (!hasAccess) {
+      logger.warn('Access denied for shift attachment', { shiftRequestId, userId, userType });
       return res.status(403).json({ 
         message: 'Access denied: You can only view attachments for shifts you are assigned to or created.' 
+      });
+    }
+
+    // Validate the Filestoreid format
+    if (!attachment.Filestoreid || attachment.Filestoreid.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+      logger.error('Invalid Filestoreid detected - appears to be timestamp instead of GCS path', {
+        shiftRequestId,
+        attachmentId: attachment.ID,
+        filestoreid: attachment.Filestoreid,
+        filename: attachment.Filename
+      });
+      
+      return res.status(500).json({ 
+        message: 'Attachment file path is corrupted. This file may have failed to upload properly to cloud storage.',
+        error: 'INVALID_FILE_STORAGE_ID',
+        details: {
+          attachmentId: attachment.ID,
+          filename: attachment.Filename,
+          issue: 'Filestoreid contains timestamp instead of cloud storage path'
+        },
+        suggestion: 'Please re-upload the file or contact system administrator.'
       });
     }
 
@@ -3358,6 +3393,7 @@ exports.getShiftRequestAttachment = async (req, res) => {
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="${attachment.Filename}"`);
+      res.setHeader('Content-Length', fileBuffer.length);
       
       // Send the buffer directly
       res.send(fileBuffer);
@@ -3366,23 +3402,41 @@ exports.getShiftRequestAttachment = async (req, res) => {
         shiftRequestId,
         userId,
         attachmentId: attachment.ID,
-        fileName: attachment.Filename
+        fileName: attachment.Filename,
+        fileSize: fileBuffer.length
       });
     } catch (downloadError) {
       logger.error('Failed to download PDF from GCS', { 
-        error: downloadError,
+        error: downloadError.message,
         filePath: attachment.Filestoreid,
-        shiftRequestId 
+        shiftRequestId,
+        attachmentId: attachment.ID
       });
+      
       return res.status(500).json({ 
-        message: 'Failed to retrieve attachment file', 
-        error: downloadError.message 
+        message: 'Failed to retrieve attachment file from cloud storage', 
+        error: 'FILE_DOWNLOAD_FAILED',
+        details: {
+          attachmentId: attachment.ID,
+          filename: attachment.Filename,
+          gcsPath: attachment.Filestoreid
+        },
+        originalError: downloadError.message
       });
     }
 
   } catch (err) {
-    logger.error('Get shift request attachment error', { error: err });
-    res.status(500).json({ message: 'Failed to retrieve attachment.', error: err.message });
+    logger.error('Get shift request attachment error', { 
+      error: err.message, 
+      stack: err.stack,
+      shiftRequestId, 
+      userId 
+    });
+    res.status(500).json({ 
+      message: 'Failed to retrieve attachment.', 
+      error: err.message,
+      shiftRequestId: shiftRequestId
+    });
   }
 };
 // ================== end getShiftRequestAttachment ==================
@@ -3764,26 +3818,32 @@ exports.addMultipleShiftAttachments = async (req, res) => {
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
       
-      // Upload PDF to Google Cloud Storage
-      const uploadResult = await uploadPDFToGCS(file.buffer, file.originalname, shiftRequestId, file.mimetype, shiftDateObj);
-      
-      // Save attachment metadata to Attachments table
-      const insertAttachmentSql = `INSERT INTO Attachments 
-        (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      
-      const attachmentParams = [
-        'Clientshiftrequest',
-        shiftRequestId.toString(),
-        uploadResult.filename,
-        uploadResult.gcsPath,
-        file.size,
-        '.pdf',
-        nowFormatted,
-        userId,
-        nowFormatted,
-        userId
-      ];
+      try {
+        // Upload PDF to Google Cloud Storage
+        const uploadResult = await uploadPDFToGCS(file.buffer, file.originalname, shiftRequestId, file.mimetype, shiftDateObj);
+        
+        // Validate upload result
+        if (!uploadResult || !uploadResult.gcsPath) {
+          throw new Error('GCS upload returned invalid result - missing gcsPath');
+        }
+        
+        // Save attachment metadata to Attachments table
+        const insertAttachmentSql = `INSERT INTO Attachments 
+          (Sourcetype, Importreference, Filename, Filestoreid, Filesize, Fileextension, Createdat, Createdbyid, Updatedat, Updatedbyid)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        
+        const attachmentParams = [
+          'Clientshiftrequest',
+          shiftRequestId.toString(),
+          uploadResult.filename,
+          uploadResult.gcsPath, // This should be a GCS path like "shifts/2025/09/shift_198_filename.pdf"
+          file.size,
+          '.pdf',
+          nowFormatted,
+          userId,
+          nowFormatted,
+          userId
+        ];
 
       const [attachmentResult] = await db.query(insertAttachmentSql, attachmentParams);
       
@@ -3811,6 +3871,21 @@ exports.addMultipleShiftAttachments = async (req, res) => {
         uploadedAt: now,
         originalName: file.originalname
       });
+      
+      } catch (fileError) {
+        logger.error(`Failed to upload file ${file.originalname}:`, { 
+          error: fileError.message,
+          shiftRequestId,
+          filename: file.originalname
+        });
+        
+        // If any file fails, return error to prevent partial uploads
+        return res.status(500).json({ 
+          message: `Failed to upload file: ${file.originalname}`, 
+          error: fileError.message,
+          details: 'Check GCS configuration and database triggers'
+        });
+      }
     }
 
     res.status(201).json({
@@ -3885,6 +3960,11 @@ exports.downloadShiftAttachment = async (req, res) => {
   const shiftRequestId = req.params.id ? parseInt(req.params.id, 10) : null;
   const attachmentId = parseInt(req.params.attachmentId, 10);
 
+  // Validate attachment ID
+  if (!attachmentId || isNaN(attachmentId)) {
+    return res.status(400).json({ message: 'Invalid attachment ID provided.' });
+  }
+
   try {
     let attachment;
     
@@ -3897,36 +3977,51 @@ exports.downloadShiftAttachment = async (req, res) => {
       );
 
       if (!shiftRows.length) {
+        logger.warn('Shift request not found', { shiftRequestId });
         return res.status(404).json({ message: 'Shift request not found.' });
       }
 
       // Get attachment details with shift validation
       const [attachmentRows] = await db.query(
-        `SELECT a.Filename, a.Filestoreid FROM Attachments a
+        `SELECT a.Filename, a.Filestoreid, a.ID as attachmentId FROM Attachments a
          INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
          WHERE a.ID = ? AND sa.Clientshiftrequestid = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
         [attachmentId, shiftRequestId]
       );
 
       if (!attachmentRows.length) {
-        return res.status(404).json({ message: 'Attachment not found.' });
+        logger.warn('Attachment not found for shift', { attachmentId, shiftRequestId });
+        return res.status(404).json({ message: 'Attachment not found for this shift.' });
       }
       attachment = attachmentRows[0];
     } else {
       // Alternative route: /clientshiftrequests/attachments/{attachmentId}/download
       // Get attachment details without shift validation (more permissive)
       const [attachmentRows] = await db.query(
-        `SELECT a.Filename, a.Filestoreid FROM Attachments a
+        `SELECT a.Filename, a.Filestoreid, a.ID as attachmentId FROM Attachments a
          INNER JOIN Shiftattachments sa ON a.ID = sa.Attachmentid
          WHERE a.ID = ? AND a.Deletedat IS NULL AND sa.Deletedat IS NULL`,
         [attachmentId]
       );
 
       if (!attachmentRows.length) {
+        logger.warn('Attachment not found', { attachmentId });
         return res.status(404).json({ message: 'Attachment not found.' });
       }
       attachment = attachmentRows[0];
     }
+
+    // Validate file storage ID exists
+    if (!attachment.Filestoreid) {
+      logger.error('Missing file storage ID', { attachmentId, filename: attachment.Filename });
+      return res.status(500).json({ message: 'File storage reference is missing.' });
+    }
+
+    logger.info('Attempting to download file', { 
+      attachmentId, 
+      filename: attachment.Filename,
+      filestoreid: attachment.Filestoreid
+    });
 
     // Download from Google Cloud Storage
     const fileBuffer = await downloadPDFFromGCS(attachment.Filestoreid);
@@ -3934,11 +4029,41 @@ exports.downloadShiftAttachment = async (req, res) => {
     // Set response headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${attachment.Filename}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    
+    logger.info('File downloaded successfully', { 
+      attachmentId, 
+      filename: attachment.Filename,
+      size: fileBuffer.length
+    });
+    
     res.send(fileBuffer);
 
   } catch (err) {
-    logger.error('Download shift attachment error', { error: err });
-    res.status(500).json({ message: 'Failed to download attachment.', error: err.message });
+    logger.error('Download shift attachment error', { 
+      error: err.message, 
+      stack: err.stack,
+      attachmentId,
+      shiftRequestId
+    });
+    
+    // More specific error messages
+    if (err.message.includes('PDF file not found in storage')) {
+      return res.status(404).json({ 
+        message: 'File not found in storage. The file may have been deleted or moved.',
+        error: 'FILE_NOT_FOUND_IN_STORAGE'
+      });
+    } else if (err.message.includes('GCS not initialized')) {
+      return res.status(503).json({ 
+        message: 'File storage service is not available.',
+        error: 'STORAGE_SERVICE_UNAVAILABLE'
+      });
+    } else {
+      return res.status(500).json({ 
+        message: 'Failed to download attachment.',
+        error: err.message 
+      });
+    }
   }
 };
 // ================== end downloadShiftAttachment ==================
